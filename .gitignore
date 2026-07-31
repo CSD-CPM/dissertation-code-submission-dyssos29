@@ -1,0 +1,26 @@
+# Dart and Flutter
+.dart_tool/
+**/.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+**/build/
+
+# IDE files
+.idea/
+**/.idea/
+*.iml
+
+# Platform-generated dependencies
+**/android/.gradle/
+**/android/local.properties
+**/ios/Pods/
+**/ios/.symlinks/
+**/macos/Pods/
+**/macos/.symlinks/
+
+# Use one workspace lock file
+**/pubspec.lock
+!/pubspec.lock

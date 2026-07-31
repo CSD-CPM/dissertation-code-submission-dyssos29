@@ -1,0 +1,13 @@
+name: food_delivery_workspace
+description: Shared workspace for the food delivery platform Flutter applications.
+publish_to: none
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+workspace:
+  - apps/platform_web
+  - apps/courier_mobile
+  - apps/packages/shared_auth
+  - apps/packages/shared_models
+  - apps/packages/shared_networking
