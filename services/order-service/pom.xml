@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>25</java.version>
+    <jib.version>3.5.2</jib.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -57,7 +58,30 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+      <plugin>
+        <groupId>com.google.cloud.tools</groupId>
+        <artifactId>jib-maven-plugin</artifactId>
+        <version>${jib.version}</version>
+        <configuration>
+          <from>
+            <image>eclipse-temurin:25-jre</image>
+          </from>
+          <container>
+            <ports>
+              <port>8080</port>
+            </ports>
+            <user>10001:10001</user>
+            <labels>
+              <org.opencontainers.image.title>
+                Restaurant and Menu Service
+              </org.opencontainers.image.title>
+              <org.opencontainers.image.description>
+                Restaurant and menu microservice for the food delivery platform
+              </org.opencontainers.image.description>
+            </labels>
+          </container>
+        </configuration>
+      </plugin>
 		</plugins>
 	</build>
-
 </project>
