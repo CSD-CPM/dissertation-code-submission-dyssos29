@@ -1,0 +1,27 @@
+defaultBaseImage: cgr.dev/chainguard/static
+
+defaultPlatforms:
+  - linux/amd64
+
+builds:
+  - id: delivery-tracking-service
+    dir: ./services/delivery-tracking-service
+    main: ./cmd/server
+
+    env:
+      - CGO_ENABLED=0
+
+    ldflags:
+      - -s
+      - -w
+
+  - id: payment-service
+    dir: ./services/payment-service
+    main: ./cmd/server
+
+    env:
+      - CGO_ENABLED=0
+
+    ldflags:
+      - -s
+      - -w
