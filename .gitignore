@@ -1,26 +1,132 @@
-# Dart and Flutter
-.dart_tool/
-**/.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-build/
-**/build/
+# ============================================================
+# Environment variables and local secrets
+# ============================================================
 
-# IDE files
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+service-account*.json
+firebase-admin*.json
+google-application-credentials*.json
+
+
+# ============================================================
+# Operating system files
+# ============================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+
+# ============================================================
+# IDEs and editors
+# ============================================================
+
 .idea/
-**/.idea/
+.vscode/
 *.iml
 
-# Platform-generated dependencies
+*.swp
+*.swo
+*~
+
+
+# ============================================================
+# Java / Maven / Jib
+# ============================================================
+
+**/target/
+
+**/.classpath
+**/.project
+**/.settings/
+
+!**/.mvn/wrapper/
+!**/mvnw
+!**/mvnw.cmd
+
+
+# ============================================================
+# Go / ko
+# ============================================================
+
+**/bin/
+*.test
+*.prof
+
+coverage.out
+coverage.html
+
+*.tar
+published-image.txt
+*-image-ref.txt
+
+
+# ============================================================
+# Dart / Flutter
+# ============================================================
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+build/
+
 **/android/.gradle/
 **/android/local.properties
+
 **/ios/Pods/
 **/ios/.symlinks/
+
 **/macos/Pods/
 **/macos/.symlinks/
 
-# Use one workspace lock file
+# Pub workspace uses the root lock file
 **/pubspec.lock
 !/pubspec.lock
+
+
+# ============================================================
+# Foundry
+# ============================================================
+
+smart-contracts/**/cache/
+smart-contracts/**/out/
+smart-contracts/**/broadcast/
+smart-contracts/**/coverage/
+
+
+# ============================================================
+# Generated contracts
+# ============================================================
+
+contracts/generated/
+**/generated-sources/
+
+
+# ============================================================
+# Local runtime data
+# ============================================================
+
+infrastructure/local-data/
+tmp/
+logs/
+*.log
+
+
+# ============================================================
+# Test and coverage output
+# ============================================================
+
+coverage/
+*.lcov
