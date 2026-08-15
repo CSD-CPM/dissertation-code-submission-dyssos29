@@ -1,0 +1,15 @@
+* text=auto
+
+# Unix/Linux scripts and configuration
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.proto text eol=lf
+*.go text eol=lf
+*.java text eol=lf
+*.dart text eol=lf
+*.md text eol=lf
+
+# Maven wrappers
+mvnw text eol=lf
+mvnw.cmd text eol=crlf
