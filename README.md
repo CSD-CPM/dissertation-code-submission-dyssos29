@@ -562,22 +562,22 @@ Image publication is separated from normal CI.
 The pipeline is:
 
 ```text
-Pull request
+Feature branch
     ↓
-Continuous Integration
+Pull Request to main
     ↓
-merge to main
+Full Continuous Integration
     ↓
-Continuous Integration on main
+Merge commit
     ↓
-successful push build
+main
     ↓
-Publish Container Images
+Container image publication
     ↓
 Docker Hub
 ```
 
-Images are published only when Continuous Integration succeeds for a push to `main`.
+Full continuous integration runs on pull requests targeting `main`. A pull request must pass the required CI quality gate before merging. Once the pull request is merged using a merge commit, the resulting push to `main` triggers container-image construction and publication.
 
 The four Docker Hub repositories are:
 
