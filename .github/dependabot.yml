@@ -1,0 +1,49 @@
+version: 2
+
+updates:
+  # ==========================================================
+  # 1. GitHub Actions Workflows (Bundles all actions into 1 PR)
+  # ==========================================================
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions-dependencies:
+        patterns:
+          - "*"
+  # ==========================================================
+  # 2. Java Services (Consolidated & Grouped Cross-Directory)
+  # ==========================================================
+  - package-ecosystem: "maven"
+    directories:
+      - "/services/*-service"
+    schedule:
+      interval: "weekly"
+    groups:
+      java-dependencies:
+        group-by: "dependency-name" # 🚀 Cleansed: Natively pairs cross-directory dependencies 1-by-1
+  # ==========================================================
+  # 3. Go Services (Uses root go.work file)
+  # ==========================================================
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*" # Groups all Go dependency updates into a single PR
+  # ==========================================================
+  # 4. Flutter / Dart Workspace (Consolidated Cross-Directory)
+  # ==========================================================
+  - package-ecosystem: "pub"
+    directories:
+      - "/"
+      - "/apps/*"
+      - "/apps/packages/*"
+    schedule:
+      interval: "weekly"
+    groups:
+      flutter-dependencies:
+        group-by: "dependency-name" # 🚀 Cleansed: Single PR per dependency across your Flutter apps
