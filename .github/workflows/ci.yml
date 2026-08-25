@@ -246,7 +246,7 @@ jobs:
       - name: Validate PostgreSQL initialization script
         run: >
           bash -n
-          infrastructure/postgres/init/01-create-service-databases.sh
+          infrastructure/postgres/init/create-service-databases.sh
       - name: Validate Envoy configuration
         shell: bash
         run: |
