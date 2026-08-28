@@ -35,7 +35,8 @@ jobs:
           input: contracts/proto
           lint: true
           format: true
-          breaking: ${{ github.event_name == 'pull_request' }}
+          # breaking: ${{ github.event_name == 'pull_request' }} --> No Protobuf baseline exists on main yet. Re-enable after this PR.
+          breaking: false
           push: false
           archive: false
           pr_comment: false
