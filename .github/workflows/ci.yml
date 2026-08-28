@@ -101,12 +101,8 @@ jobs:
         include:
           - name: delivery-tracking-service
             directory: services/delivery-tracking-service
-            main-package: >
-              ./services/delivery-tracking-service/cmd/delivery-tracking-service
           - name: payment-service
             directory: services/payment-service
-            main-package: >
-              ./services/payment-service/cmd/payment-service
 
     steps:
       - name: Check out repository
@@ -152,8 +148,6 @@ jobs:
         uses: ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
-        env:
-          KO_DOCKER_REPO: ci.local
       - name: Verify OCI image construction with ko
         env:
           KO_DOCKER_REPO: ci.local
@@ -162,7 +156,7 @@ jobs:
           ko build \
             --push=false \
             --tarball="${RUNNER_TEMP}/${{ matrix.name }}.tar" \
-            "${{ matrix.main-package }}"
+            "./${{ matrix.directory }}/cmd/server"
 
           test -f "${RUNNER_TEMP}/${{ matrix.name }}.tar"
   # ==========================================================
