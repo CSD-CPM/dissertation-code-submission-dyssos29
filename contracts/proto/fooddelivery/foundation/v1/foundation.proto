@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package fooddelivery.foundation.v1;
+
+option java_multiple_files = true;
+option java_package = "com.fooddelivery.foundation.v1";
+
+service FoundationService {
+  rpc Ping(PingRequest) returns (PingResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string service = 1;
+  string message = 2;
+}

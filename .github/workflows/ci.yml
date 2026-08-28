@@ -1,0 +1,286 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  # ==========================================================
+  # Protobuf contracts
+  # ==========================================================
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate Protobuf contracts
+        uses: bufbuild/buf-action@v1
+        with:
+          input: contracts/proto
+          lint: true
+          format: true
+          # breaking: ${{ github.event_name == 'pull_request' }} --> No Protobuf baseline exists on main yet. Re-enable after this PR.
+          breaking: false
+          push: false
+          archive: false
+          pr_comment: false
+  # ==========================================================
+  # Spring Boot services
+  # ==========================================================
+  java-services:
+    name: Java 25 / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: restaurant-menu-service
+            directory: services/restaurant-menu-service
+          - name: order-service
+            directory: services/order-service
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: |
+            ${{ matrix.directory }}/pom.xml
+      - name: Make Maven Wrapper executable
+        working-directory: ${{ matrix.directory }}
+        run: chmod +x mvnw
+      - name: Run tests and verify service
+        working-directory: ${{ matrix.directory }}
+        run: ./mvnw -B -ntp verify
+      - name: Verify OCI image construction with Jib
+        working-directory: ${{ matrix.directory }}
+        run: >
+          ./mvnw
+          -B
+          -ntp
+          jib:buildTar
+          -Djib.to.image=ci/${{ matrix.name }}:test
+      - name: Verify Jib image tarball
+        working-directory: ${{ matrix.directory }}
+        run: test -f target/jib-image.tar
+  # ==========================================================
+  # Go services
+  # ==========================================================
+  go-services:
+    name: Go / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: delivery-tracking-service
+            directory: services/delivery-tracking-service
+          - name: payment-service
+            directory: services/payment-service
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+          cache: true
+          cache-dependency-path: |
+            ${{ matrix.directory }}/go.mod
+      - name: Check Go formatting
+        working-directory: ${{ matrix.directory }}
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l .)"
+
+          if [ -n "$unformatted" ]; then
+            echo "The following Go files require formatting:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - name: Run go vet
+        working-directory: ${{ matrix.directory }}
+        run: go vet ./...
+      - name: Verify static compilation
+        working-directory: ${{ matrix.directory }}
+        env:
+          CGO_ENABLED: "0"
+        run: go build ./...
+      - name: Run tests with race detection
+        working-directory: ${{ matrix.directory }}
+        run: >
+          go test
+          -race
+          -covermode=atomic
+          -coverprofile=coverage.out
+          ./...
+      - name: Set up ko
+        uses: ko-build/setup-ko@v0.10
+        with:
+          version: v0.19.1
+      - name: Verify OCI image construction with ko
+        env:
+          KO_DOCKER_REPO: ci.local
+        shell: bash
+        run: |
+          ko build \
+            --push=false \
+            --tarball="${RUNNER_TEMP}/${{ matrix.name }}.tar" \
+            "./${{ matrix.directory }}/cmd/server"
+
+          test -f "${RUNNER_TEMP}/${{ matrix.name }}.tar"
+  # ==========================================================
+  # Flutter workspace
+  # ==========================================================
+  flutter:
+    name: Flutter workspace
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.7"
+          channel: stable
+          cache: true
+      - name: Resolve workspace dependencies
+        run: flutter pub get
+      - name: List workspace packages
+        run: dart pub workspace list
+      - name: Check Dart formatting
+        run: >
+          dart format
+          --output=none
+          --set-exit-if-changed
+          apps
+      - name: Analyze and test workspace members
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          packages=(
+            "apps/platform_web"
+            "apps/courier_mobile"
+            "apps/packages/shared_auth"
+            "apps/packages/shared_models"
+            "apps/packages/shared_networking"
+          )
+
+          for package in "${packages[@]}"; do
+            echo "Analyzing ${package}"
+
+            (
+              cd "${package}"
+              flutter analyze
+            )
+
+            if [ -d "${package}/test" ]; then
+              echo "Testing ${package}"
+
+              (
+                cd "${package}"
+                flutter test
+              )
+            else
+              echo "No test directory in ${package}; skipping tests."
+            fi
+          done
+      - name: Build Flutter web application
+        working-directory: apps/platform_web
+        run: flutter build web --release --no-pub
+  # ==========================================================
+  # Infrastructure
+  # ==========================================================
+  infrastructure:
+    name: Infrastructure validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+      - name: Validate PostgreSQL initialization script
+        run: >
+          bash -n
+          infrastructure/postgres/init/create-service-databases.sh
+      - name: Validate Envoy configuration
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$PWD/gateway/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro" \
+            envoyproxy/envoy:v1.39.0 \
+            --mode validate \
+            -c /etc/envoy/envoy.yaml
+  # ==========================================================
+  # Aggregate required check
+  # ==========================================================
+  ci-required:
+    name: CI / Required
+    if: ${{ always() }}
+    needs:
+      - contracts
+      - java-services
+      - go-services
+      - flutter
+      - infrastructure
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify all required CI jobs succeeded
+        shell: bash
+        run: |
+          results=(
+            "${{ needs.contracts.result }}"
+            "${{ needs.java-services.result }}"
+            "${{ needs.go-services.result }}"
+            "${{ needs.flutter.result }}"
+            "${{ needs.infrastructure.result }}"
+          )
+
+          for result in "${results[@]}"; do
+            if [ "$result" != "success" ]; then
+              echo "A required CI job did not succeed: $result"
+              exit 1
+            fi
+          done
+
+          echo "All required CI jobs succeeded."

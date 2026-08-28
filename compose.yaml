@@ -1,0 +1,163 @@
+name: food-delivery-platform
+
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.39.0
+    command:
+      - "-c"
+      - "/etc/envoy/envoy.yaml"
+      - "--service-cluster"
+      - "food-delivery-edge"
+    volumes:
+      - ./gateway/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "${ENVOY_HTTP_PORT:-8080}:8080"
+      - "${ENVOY_ADMIN_PORT:-9901}:9901"
+    depends_on:
+      restaurant-menu-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      delivery-tracking-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    networks:
+      - platform-network
+  restaurant-menu-service:
+    image: food-delivery/restaurant-menu-service:local
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: local
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform-network
+  order-service:
+    image: food-delivery/order-service:local
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform-network
+  delivery-tracking-service:
+    image: food-delivery/delivery-tracking-service:local
+    environment:
+      SERVER_PORT: 8080
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform-network
+  payment-service:
+    image: food-delivery/payment-service:local
+    environment:
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform-network
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-local-postgres-password}
+      POSTGRES_DB: ${POSTGRES_ADMIN_DB:-postgres}
+      ORDER_DB_NAME: ${ORDER_DB_NAME:-order_service_db}
+      ORDER_DB_USER: ${ORDER_DB_USER:-order_service_user}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:-local-order-password}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME:-payment_service_db}
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER:-payment_service_user}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-local-payment-password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - platform-network
+  mongodb:
+    image: mongo:8
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-restaurant_menu_db}
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - "--quiet"
+        - "--eval"
+        - "db.adminCommand('ping').ok"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - platform-network
+  redis:
+    image: redis:8-alpine
+    command:
+      - redis-server
+      - "--appendonly"
+      - "no"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - platform-network
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-platform}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-local-rabbitmq-password}
+    ports:
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test:
+        - CMD
+        - rabbitmq-diagnostics
+        - "-q"
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - platform-network
+networks:
+  platform-network:
+    driver: bridge
+volumes:
+  postgres-data:
+  mongodb-data:
+  redis-data:
+  rabbitmq-data:

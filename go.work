@@ -1,0 +1,6 @@
+go 1.26.5
+
+use (
+	./services/delivery-tracking-service
+	./services/payment-service
+)

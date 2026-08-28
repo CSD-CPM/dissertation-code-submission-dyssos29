@@ -1,0 +1,150 @@
+name: Release Platform
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: platform-release
+  cancel-in-progress: false
+
+
+jobs:
+  validate-release:
+    name: Validate release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Check out tagged revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate Semantic Version tag
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid release tag: ${TAG}"
+            echo "Expected format: vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          echo "Validated platform release ${TAG}"
+      - name: Verify release commit belongs to main
+        shell: bash
+        run: |
+          git fetch origin main
+
+          if ! git merge-base --is-ancestor \
+            "${GITHUB_SHA}" \
+            "origin/main"; then
+
+            echo "Release tag must reference a commit contained in main."
+            exit 1
+          fi
+
+          echo "Release commit is contained in main."
+  promote-images:
+    name: Promote / ${{ matrix.repository }}
+    needs:
+      - validate-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        repository:
+          - restaurant-menu-service
+          - order-service
+          - delivery-tracking-service
+          - payment-service
+
+    steps:
+      - name: Authenticate with Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Define image references
+        id: image
+        shell: bash
+        env:
+          VERSION: ${{ needs.validate-release.outputs.version }}
+        run: |
+          REPOSITORY="docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}"
+
+          echo "source=${REPOSITORY}:sha-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version=${REPOSITORY}:${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "latest=${REPOSITORY}:latest" >> "$GITHUB_OUTPUT"
+      - name: Verify continuous-build image exists
+        shell: bash
+        run: |
+          docker buildx imagetools inspect \
+            "${{ steps.image.outputs.source }}"
+      - name: Promote image to Semantic Version
+        shell: bash
+        run: |
+          docker buildx imagetools create \
+            --prefer-index=false \
+            --tag "${{ steps.image.outputs.version }}" \
+            "${{ steps.image.outputs.source }}"
+      - name: Update latest formal release tag
+        shell: bash
+        run: |
+          docker buildx imagetools create \
+            --prefer-index=false \
+            --tag "${{ steps.image.outputs.latest }}" \
+            "${{ steps.image.outputs.source }}"
+      - name: Record release image
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.repository }}"
+            echo
+            echo "Source:"
+            echo
+            echo '```text'
+            echo "${{ steps.image.outputs.source }}"
+            echo '```'
+            echo
+            echo "Release:"
+            echo
+            echo '```text'
+            echo "${{ steps.image.outputs.version }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+  github-release:
+    name: Create GitHub Release
+    needs:
+      - validate-release
+      - promote-images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate-release.outputs.version }}
+        shell: bash
+        run: |
+          gh release create \
+            "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Food Delivery Platform ${GITHUB_REF_NAME}"
