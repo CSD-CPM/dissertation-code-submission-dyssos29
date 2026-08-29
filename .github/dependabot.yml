@@ -38,12 +38,6 @@ updates:
   # 4. Flutter / Dart Workspace (Consolidated Cross-Directory)
   # ==========================================================
   - package-ecosystem: "pub"
-    directories:
-      - "/"
-      - "/apps/*"
-      - "/apps/packages/*"
+    directory: "/"
     schedule:
       interval: "weekly"
-    groups:
-      flutter-dependencies:
-        group-by: "dependency-name" # 🚀 Cleansed: Single PR per dependency across your Flutter apps
