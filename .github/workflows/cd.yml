@@ -57,8 +57,7 @@ jobs:
       - name: Build and publish SHA image with Jib
         working-directory: ${{ matrix.directory }}
         env:
-          IMAGE_REPOSITORY: >
-            docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
+          IMAGE_REPOSITORY: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
         shell: bash
         run: |
           IMAGE="${IMAGE_REPOSITORY}:sha-${GITHUB_SHA}"
@@ -73,8 +72,7 @@ jobs:
       - name: Record immutable Java image
         working-directory: ${{ matrix.directory }}
         env:
-          IMAGE_REPOSITORY: >
-            docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
+          IMAGE_REPOSITORY: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
         shell: bash
         run: |
           DIGEST="$(cat target/jib-image.digest)"
@@ -112,12 +110,10 @@ jobs:
         include:
           - name: delivery-tracking-service
             repository: delivery-tracking-service
-            main-package: >
-              ./services/delivery-tracking-service/cmd/delivery-tracking-service
+            main-package: ./services/delivery-tracking-service/cmd/server
           - name: payment-service
             repository: payment-service
-            main-package: >
-              ./services/payment-service/cmd/payment-service
+            main-package: ./services/payment-service/cmd/server
 
     steps:
       - name: Check out merge commit
@@ -134,9 +130,6 @@ jobs:
         uses: ko-build/setup-ko@v0.10
         with:
           version: v0.19.1
-        env:
-          KO_DOCKER_REPO: >
-            docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
       - name: Authenticate ko with Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
@@ -149,8 +142,7 @@ jobs:
               --password-stdin
       - name: Build and publish SHA image with ko
         env:
-          KO_DOCKER_REPO: >
-            docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
+          KO_DOCKER_REPO: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.repository }}
         shell: bash
         run: |
           IMAGE_REFS="${RUNNER_TEMP}/${{ matrix.name }}-image-ref.txt"
