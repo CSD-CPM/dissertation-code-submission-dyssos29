@@ -1,3 +1,3 @@
 module github.com/dyssos29/food-delivery-platform/services/payment-service
 
-go 1.26.5
+go 1.26.6
