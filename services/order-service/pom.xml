@@ -73,10 +73,10 @@
             <user>10001:10001</user>
             <labels>
               <org.opencontainers.image.title>
-                Restaurant and Menu Service
+                Order Service
               </org.opencontainers.image.title>
               <org.opencontainers.image.description>
-                Restaurant and menu microservice for the food delivery platform
+                Order management microservice for the food delivery platform
               </org.opencontainers.image.description>
             </labels>
           </container>
