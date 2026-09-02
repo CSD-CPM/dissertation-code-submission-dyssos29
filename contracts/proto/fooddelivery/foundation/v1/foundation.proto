@@ -2,6 +2,9 @@ syntax = "proto3";
 
 package fooddelivery.foundation.v1;
 
+import "google/api/annotations.proto";
+
+option go_package = "github.com/dyssos29/food-delivery-platform/contracts/gen/go/fooddelivery/foundation/v1;foundationv1";
 option java_multiple_files = true;
 option java_package = "com.fooddelivery.foundation.v1";
 
@@ -14,4 +17,62 @@ message PingRequest {}
 message PingResponse {
   string service = 1;
   string message = 2;
+}
+
+message CustomerPingRequest {}
+
+message CustomerPingResponse {
+  string service = 1;
+  string subject = 2;
+  string role = 3;
+  string message = 4;
+}
+
+message AdminPingRequest {}
+
+message AdminPingResponse {
+  string service = 1;
+  string subject = 2;
+  string role = 3;
+  string message = 4;
+}
+
+message RestaurantPingRequest {}
+
+message RestaurantPingResponse {
+  string service = 1;
+  string subject = 2;
+  string role = 3;
+  string message = 4;
+}
+
+message CourierPingRequest {}
+
+message CourierPingResponse {
+  string service = 1;
+  string subject = 2;
+  string role = 3;
+  string message = 4;
+}
+
+service OrderFoundationService {
+  rpc CustomerPing(CustomerPingRequest) returns (CustomerPingResponse) {
+    option (google.api.http) = {get: "/api/v1/customer/ping"};
+  }
+
+  rpc AdminPing(AdminPingRequest) returns (AdminPingResponse) {
+    option (google.api.http) = {get: "/api/v1/admin/ping"};
+  }
+}
+
+service RestaurantFoundationService {
+  rpc RestaurantPing(RestaurantPingRequest) returns (RestaurantPingResponse) {
+    option (google.api.http) = {get: "/api/v1/restaurant/ping"};
+  }
+}
+
+service DeliveryFoundationService {
+  rpc CourierPing(CourierPingRequest) returns (CourierPingResponse) {
+    option (google.api.http) = {get: "/api/v1/courier/ping"};
+  }
 }
