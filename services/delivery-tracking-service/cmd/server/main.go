@@ -6,14 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/dyssos29/food-delivery-platform/services/delivery-tracking-service/internal/grpcserver"
 )
 
-const serviceName = "delivery-tracking-service"
+const (
+	serviceName = "delivery-tracking-service"
+	grpcPort    = "9090"
+)
 
 type healthResponse struct {
 	Service string `json:"service"`
@@ -48,16 +54,37 @@ func run() error {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	serverError := make(chan error, 1)
+	grpcListener, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to create gRPC listener: %w",
+			err,
+		)
+	}
+
+	grpcServer := grpcserver.New()
+
+	httpServerError := make(chan error, 1)
+	grpcServerError := make(chan error, 1)
 
 	go func() {
 		slog.Info(
-			"service started",
+			"HTTP server started",
 			"service", serviceName,
 			"port", port,
 		)
 
-		serverError <- server.ListenAndServe()
+		httpServerError <- server.ListenAndServe()
+	}()
+
+	go func() {
+		slog.Info(
+			"gRPC server started",
+			"service", serviceName,
+			"port", grpcPort,
+		)
+
+		grpcServerError <- grpcServer.Serve(grpcListener)
 	}()
 
 	shutdownContext, stop := signal.NotifyContext(
@@ -68,14 +95,21 @@ func run() error {
 
 	defer stop()
 
+	var runError error
+
 	select {
-	case err := <-serverError:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
+	case err := <-httpServerError:
+		if !errors.Is(err, http.ErrServerClosed) {
+			runError = fmt.Errorf(
+				"HTTP server failed: %w",
+				err,
+			)
 		}
-
-		return fmt.Errorf("HTTP server failed: %w", err)
-
+	case err := <-grpcServerError:
+		runError = fmt.Errorf(
+			"gRPC server failed: %w",
+			err,
+		)
 	case <-shutdownContext.Done():
 		slog.Info(
 			"shutdown requested",
@@ -91,13 +125,38 @@ func run() error {
 	defer cancel()
 
 	if err := server.Shutdown(timeoutContext); err != nil {
-		return fmt.Errorf(
-			"graceful shutdown failed: %w",
-			err,
-		)
+		if runError == nil {
+			runError = fmt.Errorf(
+				"HTTP graceful shutdown failed: %w",
+				err,
+			)
+		}
 	}
 
-	return nil
+	grpcStopped := make(chan struct{})
+
+	go func() {
+		grpcServer.GracefulStop()
+		close(grpcStopped)
+	}()
+
+	select {
+	case <-grpcStopped:
+		slog.Info(
+			"gRPC server stopped",
+			"service", serviceName,
+		)
+
+	case <-timeoutContext.Done():
+		slog.Warn(
+			"gRPC graceful shutdown timed out; forcing stop",
+			"service", serviceName,
+		)
+
+		grpcServer.Stop()
+	}
+
+	return runError
 }
 
 func newHandler() http.Handler {

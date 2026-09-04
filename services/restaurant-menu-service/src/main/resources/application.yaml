@@ -1,6 +1,9 @@
 spring:
   application:
     name: restaurant-menu-service
+  grpc:
+    server:
+      port: 9090
 
 server:
   port: ${SERVER_PORT:8080}
