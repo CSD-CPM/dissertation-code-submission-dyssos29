@@ -19,6 +19,22 @@ static_resources:
                         - "*"
                       routes:
                         - match:
+                            path: "/api/v1/customer/ping"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            path: "/api/v1/admin/ping"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            path: "/api/v1/restaurant/ping"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            path: "/api/v1/courier/ping"
+                          route:
+                            cluster: delivery_tracking_service_grpc
+                        - match:
                             path: "/health"
                           direct_response:
                             status: 200
@@ -45,6 +61,15 @@ static_resources:
                             cluster: payment_service
                             prefix_rewrite: "/health/live"
                 http_filters:
+                  - name: envoy.filters.http.grpc_json_transcoder
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                      proto_descriptor: /etc/envoy/foundation-descriptor.pb
+                      services:
+                        - fooddelivery.foundation.v1.OrderFoundationService
+                        - fooddelivery.foundation.v1.RestaurantFoundationService
+                        - fooddelivery.foundation.v1.DeliveryFoundationService
+                      match_incoming_request_route: true
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -97,6 +122,57 @@ static_resources:
                     socket_address:
                       address: payment-service
                       port_value: 8080
+    - name: order_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: order_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: order-service
+                      port_value: 9090
+    - name: restaurant_menu_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: restaurant_menu_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: restaurant-menu-service
+                      port_value: 9090
+    - name: delivery_tracking_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: delivery_tracking_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: delivery-tracking-service
+                      port_value: 9090
 admin:
   access_log_path: /tmp/envoy-admin-access.log
   address:
