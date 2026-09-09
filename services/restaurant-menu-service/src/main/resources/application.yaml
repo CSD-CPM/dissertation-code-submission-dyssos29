@@ -29,3 +29,7 @@ management:
 info:
   app:
     name: ${spring.application.name}
+
+logging:
+  pattern:
+    correlation: "[requestId=%X{requestId:-}] "

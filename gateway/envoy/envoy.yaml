@@ -11,6 +11,23 @@ static_resources:
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: public_ingress
+                generate_request_id: true
+                always_set_request_id_in_response: true
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          timestamp: "%START_TIME%"
+                          service: "envoy"
+                          severity: "INFO"
+                          message: "request completed"
+                          requestId: "%REQ(X-REQUEST-ID)%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          status: "%RESPONSE_CODE%"
+                          upstreamCluster: "%UPSTREAM_CLUSTER%"
                 route_config:
                   name: local_routes
                   virtual_hosts:

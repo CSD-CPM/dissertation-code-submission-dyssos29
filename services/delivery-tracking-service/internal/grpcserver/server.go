@@ -6,7 +6,14 @@ import (
 )
 
 func New() *grpc.Server {
-	server := grpc.NewServer()
+	server := grpc.NewServer(
+		grpc.UnaryInterceptor(
+			unaryRequestCorrelationInterceptor,
+		),
+		grpc.StreamInterceptor(
+			streamRequestCorrelationInterceptor,
+		),
+	)
 
 	foundationv1.RegisterDeliveryFoundationServiceServer(
 		server,
