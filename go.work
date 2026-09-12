@@ -4,4 +4,5 @@ use (
 	./contracts/gen
 	./services/delivery-tracking-service
 	./services/payment-service
+	./tools/identity-admin
 )
