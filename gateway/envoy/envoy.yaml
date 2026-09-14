@@ -78,6 +78,57 @@ static_resources:
                             cluster: payment_service
                             prefix_rewrite: "/health/live"
                 http_filters:
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      bypass_cors_preflight: true
+                      providers:
+                        identity_platform:
+                          issuer: "https://securetoken.google.com/food-delivery-platform-msc"
+                          audiences:
+                            - "food-delivery-platform-msc"
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          forward: false
+                          remote_jwks:
+                            http_uri:
+                              uri: "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+                              cluster: firebase_jwks
+                              timeout: 5s
+                            cache_duration: 3600s
+                          claim_to_headers:
+                            - header_name: x-authenticated-sub
+                              claim_name: sub
+                            - header_name: x-authenticated-role
+                              claim_name: role
+                      rules:
+                        - match:
+                            path: "/health"
+                        - match:
+                            path: "/health/restaurant"
+                        - match:
+                            path: "/health/order"
+                        - match:
+                            path: "/health/delivery"
+                        - match:
+                            path: "/health/payment"
+                        - match:
+                            prefix: "/api/v1/customer/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/restaurant/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/courier/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/admin/"
+                          requires:
+                            provider_name: identity_platform
                   - name: envoy.filters.http.grpc_json_transcoder
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
@@ -91,6 +142,28 @@ static_resources:
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
+    - name: firebase_jwks
+      type: LOGICAL_DNS
+      connect_timeout: 5s
+      load_assignment:
+        cluster_name: firebase_jwks
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: www.googleapis.com
+                      port_value: 443
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: www.googleapis.com
+          auto_sni_san_validation: true
+          common_tls_context:
+            validation_context:
+              trusted_ca:
+                filename: /etc/ssl/certs/ca-certificates.crt
     - name: restaurant_menu_service
       type: STRICT_DNS
       connect_timeout: 2s
