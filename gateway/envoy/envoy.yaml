@@ -129,6 +129,84 @@ static_resources:
                             prefix: "/api/v1/admin/"
                           requires:
                             provider_name: identity_platform
+                  - name: envoy.filters.http.rbac
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                      rules:
+                        action: ALLOW
+                        policies:
+                          allow-health:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    exact: "/health"
+                              - url_path:
+                                  path:
+                                    exact: "/health/restaurant"
+                              - url_path:
+                                  path:
+                                    exact: "/health/order"
+                              - url_path:
+                                  path:
+                                    exact: "/health/delivery"
+                              - url_path:
+                                  path:
+                                    exact: "/health/payment"
+                            principals:
+                              - any: true
+                          allow-cors-preflight:
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header:
+                                        name: ":method"
+                                        string_match:
+                                          exact: "OPTIONS"
+                                    - url_path:
+                                        path:
+                                          prefix: "/api/v1/"
+                            principals:
+                              - any: true
+                          customer-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/customer/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "CUSTOMER"
+                          restaurant-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/restaurant/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "RESTAURANT_OWNER"
+                          courier-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/courier/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "COURIER"
+                          admin-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/admin/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "ADMIN"
                   - name: envoy.filters.http.grpc_json_transcoder
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
