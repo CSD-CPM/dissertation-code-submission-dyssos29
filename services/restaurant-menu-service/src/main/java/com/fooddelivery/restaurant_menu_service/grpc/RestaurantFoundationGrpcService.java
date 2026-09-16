@@ -5,6 +5,8 @@ import com.fooddelivery.foundation.v1.RestaurantPingRequest;
 import com.fooddelivery.foundation.v1.RestaurantPingResponse;
 import io.grpc.stub.StreamObserver;
 import org.springframework.grpc.server.service.GrpcService;
+import com.fooddelivery.restaurant_menu_service.auth.RoleGuard;
+import com.fooddelivery.restaurant_menu_service.auth.Role;
 
 @GrpcService
 public class RestaurantFoundationGrpcService
@@ -14,6 +16,7 @@ public class RestaurantFoundationGrpcService
     public void restaurantPing(
             RestaurantPingRequest request,
             StreamObserver<RestaurantPingResponse> responseObserver) {
+        RoleGuard.requireRole(Role.RESTAURANT_OWNER);
 
         RestaurantPingResponse response =
                 RestaurantPingResponse.newBuilder()

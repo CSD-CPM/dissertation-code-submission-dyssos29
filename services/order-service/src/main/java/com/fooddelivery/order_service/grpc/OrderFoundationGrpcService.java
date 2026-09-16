@@ -7,6 +7,8 @@ import com.fooddelivery.foundation.v1.CustomerPingResponse;
 import com.fooddelivery.foundation.v1.OrderFoundationServiceGrpc;
 import io.grpc.stub.StreamObserver;
 import org.springframework.grpc.server.service.GrpcService;
+import com.fooddelivery.order_service.auth.RoleGuard;
+import com.fooddelivery.order_service.auth.Role;
 
 @GrpcService
 public class OrderFoundationGrpcService
@@ -16,6 +18,7 @@ public class OrderFoundationGrpcService
     public void customerPing(
             CustomerPingRequest request,
             StreamObserver<CustomerPingResponse> responseObserver) {
+        RoleGuard.requireRole(Role.CUSTOMER);
 
         CustomerPingResponse response =
                 CustomerPingResponse.newBuilder()
@@ -31,6 +34,7 @@ public class OrderFoundationGrpcService
     public void adminPing(
             AdminPingRequest request,
             StreamObserver<AdminPingResponse> responseObserver) {
+        RoleGuard.requireRole(Role.ADMIN);
 
         AdminPingResponse response =
                 AdminPingResponse.newBuilder()
