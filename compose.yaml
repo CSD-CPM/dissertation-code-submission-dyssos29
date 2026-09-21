@@ -14,6 +14,7 @@ services:
     ports:
       - "${ENVOY_HTTP_PORT:-8080}:8080"
       - "${ENVOY_ADMIN_PORT:-9901}:9901"
+      - "${ENVOY_ANDROID_HTTP_PORT:-18081}:8080"
     depends_on:
       restaurant-menu-service:
         condition: service_started

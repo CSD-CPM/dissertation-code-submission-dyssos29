@@ -77,6 +77,16 @@ static_resources:
                           route:
                             cluster: payment_service
                             prefix_rewrite: "/health/live"
+                      typed_per_filter_config:
+                        envoy.filters.http.cors:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
+                          allow_origin_string_match:
+                            - exact: "http://localhost:3000"
+                          allow_methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+                          allow_headers: "authorization,content-type,accept,x-request-id"
+                          expose_headers: "x-request-id,grpc-status,grpc-message"
+                          max_age: "600"
+                          allow_credentials: true
                 http_filters:
                   - name: envoy.filters.http.jwt_authn
                     typed_config:
@@ -207,6 +217,9 @@ static_resources:
                                   name: x-authenticated-role
                                   string_match:
                                     exact: "ADMIN"
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
                   - name: envoy.filters.http.grpc_json_transcoder
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
@@ -222,6 +235,7 @@ static_resources:
   clusters:
     - name: firebase_jwks
       type: LOGICAL_DNS
+      dns_lookup_family: V4_ONLY
       connect_timeout: 5s
       load_assignment:
         cluster_name: firebase_jwks
