@@ -39,6 +39,31 @@ jobs:
           push: false
           archive: false
           pr_comment: false
+      - name: Verify generated contract artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd contracts/proto
+
+          buf generate
+
+          buf build \
+            --as-file-descriptor-set \
+            --exclude-source-info \
+            -o ../../gateway/envoy/foundation-descriptor.pb
+
+          cd ../..
+
+          if [ -n "$(git status --porcelain -- \
+            contracts/gen \
+            gateway/envoy/foundation-descriptor.pb)" ]; then
+            echo "Generated contract artifacts are out of date."
+            git status --short -- \
+              contracts/gen \
+              gateway/envoy/foundation-descriptor.pb
+            exit 1
+          fi
   # ==========================================================
   # Spring Boot services
   # ==========================================================
@@ -246,6 +271,7 @@ jobs:
         run: |
           docker run --rm \
             -v "$PWD/gateway/envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro" \
+            -v "$PWD/gateway/envoy/foundation-descriptor.pb:/etc/envoy/foundation-descriptor.pb:ro" \
             envoyproxy/envoy:v1.39.0 \
             --mode validate \
             -c /etc/envoy/envoy.yaml
