@@ -94,7 +94,7 @@ RabbitMQ communicates only with application services and does not connect direct
 | Courier | Flutter Android |
 | Edge gateway | Envoy Proxy |
 | Authentication / CIAM | Google Cloud Identity Platform / Firebase Auth SDK |
-| Authentication protocol | OIDC / JWT |
+| Authentication tokens | Identity Platform ID tokens (JWT) |
 | Edge authorization | Envoy JWT authentication and RBAC |
 | Service authorization | Trusted identity metadata and role guards |
 | Java services | Java 25 / Spring Boot |
