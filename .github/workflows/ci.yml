@@ -32,6 +32,7 @@ jobs:
       - name: Validate Protobuf contracts
         uses: bufbuild/buf-action@v1
         with:
+          version: 1.72.0
           input: contracts/proto
           lint: true
           format: true
