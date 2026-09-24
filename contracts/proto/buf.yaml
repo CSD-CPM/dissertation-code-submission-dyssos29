@@ -10,6 +10,8 @@ lint:
 breaking:
   use:
     - FILE
+  except:
+    - FILE_SAME_GO_PACKAGE
 
 deps:
   - buf.build/googleapis/googleapis
