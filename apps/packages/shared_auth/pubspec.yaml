@@ -2,15 +2,19 @@ name: shared_auth
 description: "Flutter package for shared authentication functionality."
 resolution: workspace
 version: 0.0.1
-homepage:
+publish_to: none
 
 environment:
   sdk: ^3.12.2
   flutter: ">=1.17.0"
 
 dependencies:
+  firebase_auth: ^6.7.0
   flutter:
     sdk: flutter
+
+  shared_models:
+    path: ../shared_models
 
 dev_dependencies:
   flutter_test:

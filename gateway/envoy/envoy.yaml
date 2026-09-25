@@ -11,6 +11,23 @@ static_resources:
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: public_ingress
+                generate_request_id: true
+                always_set_request_id_in_response: true
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        json_format:
+                          timestamp: "%START_TIME%"
+                          service: "envoy"
+                          severity: "INFO"
+                          message: "request completed"
+                          requestId: "%REQ(X-REQUEST-ID)%"
+                          method: "%REQ(:METHOD)%"
+                          path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+                          status: "%RESPONSE_CODE%"
+                          upstreamCluster: "%UPSTREAM_CLUSTER%"
                 route_config:
                   name: local_routes
                   virtual_hosts:
@@ -18,6 +35,22 @@ static_resources:
                       domains:
                         - "*"
                       routes:
+                        - match:
+                            path: "/api/v1/customer/ping"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            path: "/api/v1/admin/ping"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            path: "/api/v1/restaurant/ping"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            path: "/api/v1/courier/ping"
+                          route:
+                            cluster: delivery_tracking_service_grpc
                         - match:
                             path: "/health"
                           direct_response:
@@ -44,11 +77,185 @@ static_resources:
                           route:
                             cluster: payment_service
                             prefix_rewrite: "/health/live"
+                      typed_per_filter_config:
+                        envoy.filters.http.cors:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
+                          allow_origin_string_match:
+                            - exact: "http://localhost:3000"
+                          allow_methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+                          allow_headers: "authorization,content-type,accept,x-request-id"
+                          expose_headers: "x-request-id,grpc-status,grpc-message"
+                          max_age: "600"
+                          allow_credentials: true
                 http_filters:
+                  - name: envoy.filters.http.jwt_authn
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+                      bypass_cors_preflight: true
+                      providers:
+                        identity_platform:
+                          issuer: "https://securetoken.google.com/food-delivery-platform-msc"
+                          audiences:
+                            - "food-delivery-platform-msc"
+                          from_headers:
+                            - name: Authorization
+                              value_prefix: "Bearer "
+                          forward: false
+                          remote_jwks:
+                            http_uri:
+                              uri: "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+                              cluster: firebase_jwks
+                              timeout: 5s
+                            cache_duration: 3600s
+                          claim_to_headers:
+                            - header_name: x-authenticated-sub
+                              claim_name: sub
+                            - header_name: x-authenticated-role
+                              claim_name: role
+                      rules:
+                        - match:
+                            path: "/health"
+                        - match:
+                            path: "/health/restaurant"
+                        - match:
+                            path: "/health/order"
+                        - match:
+                            path: "/health/delivery"
+                        - match:
+                            path: "/health/payment"
+                        - match:
+                            prefix: "/api/v1/customer/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/restaurant/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/courier/"
+                          requires:
+                            provider_name: identity_platform
+                        - match:
+                            prefix: "/api/v1/admin/"
+                          requires:
+                            provider_name: identity_platform
+                  - name: envoy.filters.http.rbac
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC
+                      rules:
+                        action: ALLOW
+                        policies:
+                          allow-health:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    exact: "/health"
+                              - url_path:
+                                  path:
+                                    exact: "/health/restaurant"
+                              - url_path:
+                                  path:
+                                    exact: "/health/order"
+                              - url_path:
+                                  path:
+                                    exact: "/health/delivery"
+                              - url_path:
+                                  path:
+                                    exact: "/health/payment"
+                            principals:
+                              - any: true
+                          allow-cors-preflight:
+                            permissions:
+                              - and_rules:
+                                  rules:
+                                    - header:
+                                        name: ":method"
+                                        string_match:
+                                          exact: "OPTIONS"
+                                    - url_path:
+                                        path:
+                                          prefix: "/api/v1/"
+                            principals:
+                              - any: true
+                          customer-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/customer/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "CUSTOMER"
+                          restaurant-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/restaurant/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "RESTAURANT_OWNER"
+                          courier-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/courier/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "COURIER"
+                          admin-api:
+                            permissions:
+                              - url_path:
+                                  path:
+                                    prefix: "/api/v1/admin/"
+                            principals:
+                              - header:
+                                  name: x-authenticated-role
+                                  string_match:
+                                    exact: "ADMIN"
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.grpc_json_transcoder
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.grpc_json_transcoder.v3.GrpcJsonTranscoder
+                      proto_descriptor: /etc/envoy/foundation-descriptor.pb
+                      services:
+                        - fooddelivery.foundation.v1.OrderFoundationService
+                        - fooddelivery.foundation.v1.RestaurantFoundationService
+                        - fooddelivery.foundation.v1.DeliveryFoundationService
+                      match_incoming_request_route: true
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
+    - name: firebase_jwks
+      type: LOGICAL_DNS
+      dns_lookup_family: V4_ONLY
+      connect_timeout: 5s
+      load_assignment:
+        cluster_name: firebase_jwks
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: www.googleapis.com
+                      port_value: 443
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          sni: www.googleapis.com
+          auto_sni_san_validation: true
+          common_tls_context:
+            validation_context:
+              trusted_ca:
+                filename: /etc/ssl/certs/ca-certificates.crt
     - name: restaurant_menu_service
       type: STRICT_DNS
       connect_timeout: 2s
@@ -97,6 +304,57 @@ static_resources:
                     socket_address:
                       address: payment-service
                       port_value: 8080
+    - name: order_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: order_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: order-service
+                      port_value: 9090
+    - name: restaurant_menu_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: restaurant_menu_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: restaurant-menu-service
+                      port_value: 9090
+    - name: delivery_tracking_service_grpc
+      type: STRICT_DNS
+      connect_timeout: 2s
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: delivery_tracking_service_grpc
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: delivery-tracking-service
+                      port_value: 9090
 admin:
   access_log_path: /tmp/envoy-admin-access.log
   address:

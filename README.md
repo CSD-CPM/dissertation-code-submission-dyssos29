@@ -1,6 +1,6 @@
 # Cloud-Native Food Delivery Platform
 
-Prototype developed for the dissertation:
+Prototype developed for the MSc dissertation:
 
 > **Design and Implementation of a Cloud-Native Microservices-Based Food Delivery Platform with Blockchain Payment Integration**
 
@@ -16,15 +16,24 @@ Development follows a lightweight **Solo Scrumban** process using iterative, inc
 
 The current foundation establishes:
 
-- the modular monorepo;
+- a modular monorepo;
 - four independently deployable backend services;
-- Flutter web/mobile workspaces;
-- shared contracts;
-- Envoy as the edge gateway;
+- Flutter web and Android clients;
+- shared Protobuf contracts;
+- Envoy as the centralized edge gateway;
 - local Docker Compose infrastructure;
-- health and readiness endpoints;
+- service health/readiness endpoints;
+- Google Cloud Identity Platform authentication;
+- trusted role claims for `CUSTOMER`, `RESTAURANT_OWNER`, `COURIER`, and `ADMIN`;
+- JWT validation and role-based access control at Envoy;
+- service-level authorization guards;
+- authenticated Flutter login/logout and role-based routing;
+- request-ID propagation from Envoy to backend services;
+- automated access-control and generated-contract tests;
 - CI/CD workflows;
 - container-image publication and release versioning.
+
+Cycle 1 establishes the platform foundation and access-control vertical slice. Later cycles add business workflows, messaging, blockchain payments, delivery tracking, deployment, and evaluation.
 
 ---
 
@@ -39,13 +48,13 @@ The backend consists of four business microservices:
 | Delivery and Tracking Service | Go | Redis |
 | Payment Service | Go | PostgreSQL |
 
-Google Cloud Identity Platform provides managed authentication and identity management.
+Supporting platform components include:
 
-Envoy Proxy is the centralized edge gateway.
-
-RabbitMQ provides asynchronous communication and Saga choreography between the four business services.
-
-Only the Payment Service communicates directly with the blockchain RPC.
+- **Google Cloud Identity Platform** for authentication and identity management;
+- **Envoy Proxy** as the centralized edge gateway;
+- **RabbitMQ** for asynchronous communication and Saga choreography;
+- **Firebase Cloud Messaging** for customer notification fallback;
+- **Base Sepolia** for test-network smart-contract execution.
 
 ```text
 Flutter Clients
@@ -53,24 +62,24 @@ Flutter Clients
       v
     Envoy
       |
-      +-------------------------------+
-      |          |          |         |
-      v          v          v         v
- Restaurant    Order     Delivery   Payment
- & Menu        Service   & Tracking Service
- Service                  Service
-      |          |          |         |
-   MongoDB   PostgreSQL    Redis   PostgreSQL
-      \          |          |         /
-       +---------+ RabbitMQ +--------+
-                                   |
-                                   v
+      +-----------------------------------+
+      |            |            |        |
+      v            v            v        v
+ Restaurant      Order       Delivery   Payment
+ & Menu          Service     & Tracking Service
+ Service                     Service
+      |            |            |        |
+   MongoDB     PostgreSQL      Redis   PostgreSQL
+      \            |            |       /
+       +-----------+ RabbitMQ --+------+
+                                    |
+                                    v
                               Base Sepolia
 ```
 
 Each service exclusively owns its datastore. Cross-service database access is prohibited.
 
-RabbitMQ connects only to the four business microservices. It does not connect directly to databases, Envoy, clients, Identity Platform, Firebase Cloud Messaging, or the blockchain.
+RabbitMQ communicates only with application services and does not connect directly to databases.
 
 ---
 
@@ -79,16 +88,19 @@ RabbitMQ connects only to the four business microservices. It does not connect d
 | Area | Technology |
 |---|---|
 | Frontend | Flutter / Dart |
-| Customer | Flutter Web / PWA |
+| Customer | Flutter Web |
 | Restaurant Owner | Flutter Web |
 | Administrator | Flutter Web |
-| Courier | Flutter mobile |
+| Courier | Flutter Android |
 | Edge gateway | Envoy Proxy |
-| Authentication / CIAM | Google Cloud Identity Platform, OIDC, JWT |
-| Java services | Java 25 LTS, Spring Boot |
-| Go services | Go |
+| Authentication / CIAM | Google Cloud Identity Platform / Firebase Auth SDK |
+| Authentication tokens | Identity Platform ID tokens (JWT) |
+| Edge authorization | Envoy JWT authentication and RBAC |
+| Service authorization | Trusted identity metadata and role guards |
+| Java services | Java 25 / Spring Boot |
+| Go services | Go 1.26.6 |
 | Internal synchronous communication | gRPC |
-| Web client communication | REST/HTTPS through Envoy |
+| Web client communication | REST through Envoy |
 | Courier location ingestion | Native gRPC streaming |
 | Customer live tracking | WebSockets |
 | Messaging | RabbitMQ / AMQP 0-9-1 |
@@ -99,7 +111,6 @@ RabbitMQ connects only to the four business microservices. It does not connect d
 | Java containerisation | Jib |
 | Go containerisation | `ko` |
 | Local orchestration | Docker Compose |
-| Container registry | Docker Hub |
 | Cloud orchestration | Google Kubernetes Engine |
 | Smart contract | Solidity |
 | Smart-contract tooling | Foundry |
@@ -143,51 +154,29 @@ food-delivery-platform/
 │   └── envoy/
 │
 ├── infrastructure/
-│   ├── compose/
-│   ├── postgres/
-│   ├── mongodb/
-│   ├── rabbitmq/
-│   └── kubernetes/
-│
 ├── smart-contracts/
 │   └── escrow/
-│
 ├── tools/
 │   └── identity-admin/
-│
 ├── docs/
-│   ├── decisions/
-│   ├── diagrams/
-│   ├── cycle-1/
-│   ├── cycle-evidence/
-│   ├── test-results/
-│   └── evaluation-data/
-│
 ├── scripts/
-│   └── build-local-images.sh
-│
-├── .editorconfig
-├── .env.example
-├── .gitattributes
-├── .gitignore
-├── .ko.yaml
 ├── compose.yaml
 ├── go.work
 ├── pubspec.yaml
 └── README.md
 ```
 
-The repository is a **modular monorepo**. Each microservice remains independently buildable, testable, containerised, and deployable.
+The repository is a **modular monorepo**, and its folder structure is approximate and may change. Each microservice remains independently buildable, testable, containerised, and deployable.
 
 ---
 
 ## Communication Model
 
-External web traffic enters through Envoy.
+External web traffic enters through Envoy:
 
 ```text
 Flutter Web
-    → REST/HTTPS
+    → REST
     → Envoy
     → backend services
 ```
@@ -201,32 +190,113 @@ Courier Mobile
     → Delivery and Tracking Service
 ```
 
-Customer live tracking uses WebSockets:
+Customer live tracking uses:
 
 ```text
 Delivery and Tracking Service
     → Envoy
     → WebSocket
-    → Customer
+    → Customer Web
 ```
 
-Internal synchronous service communication uses gRPC only where required. The main planned synchronous business-service interaction is:
+Internal synchronous service communication uses gRPC where required.
+
+Distributed workflows use RabbitMQ events and choreography-based Sagas.
+
+Individual GPS location updates are not sent through RabbitMQ.
+
+---
+
+## Authentication and Authorization
+
+Google Cloud Identity Platform authenticates users. Flutter clients use Firebase Auth SDKs to obtain Identity Platform ID tokens.
+
+The platform currently defines four roles:
 
 ```text
-Order Service
-    → gRPC
-    → Restaurant and Menu Service
+CUSTOMER
+RESTAURANT_OWNER
+COURIER
+ADMIN
 ```
 
-Distributed workflow coordination uses RabbitMQ events and choreography-based Sagas.
+Roles are stored as trusted custom claims and are assigned only through privileged administrative tooling. Clients do not create or select their own roles.
 
-Individual GPS updates are not sent through RabbitMQ.
+Protected requests follow this flow:
+
+```text
+Flutter Client
+    ↓
+Identity Platform ID Token
+    ↓
+Authorization: Bearer <token>
+    ↓
+Envoy JWT validation
+    ↓
+Envoy RBAC
+    ↓
+trusted identity metadata
+    ↓
+backend authorization guard
+```
+
+Envoy validates the token signature, issuer, audience, and validity before forwarding protected requests.
+
+Verified identity information is propagated internally using:
+
+```text
+x-authenticated-sub
+x-authenticated-role
+```
+
+Backend services retain a second authorization boundary and reject requests with missing or incorrect trusted identity metadata.
+
+Public health routes do not require authentication.
+
+### Access Matrix
+
+Expected protected-endpoint behaviour:
+
+| Token | Customer | Restaurant | Courier | Admin |
+|---|---:|---:|---:|---:|
+| None | 401 | 401 | 401 | 401 |
+| Invalid | 401 | 401 | 401 | 401 |
+| CUSTOMER | 200 | 403 | 403 | 403 |
+| RESTAURANT_OWNER | 403 | 200 | 403 | 403 |
+| COURIER | 403 | 403 | 200 | 403 |
+| ADMIN | 403 | 403 | 403 | 200 |
+
+The complete 24-case matrix is verified during Cycle 1 acceptance testing.
+
+---
+
+## Request Correlation
+
+Envoy assigns or propagates an `x-request-id` for incoming requests.
+
+The identifier is forwarded to backend services and included in structured application logs.
+
+Example flow:
+
+```text
+Client
+    ↓
+Envoy
+requestId = <uuid>
+    ↓
+gRPC
+    ↓
+Backend Service
+requestId = <same uuid>
+```
+
+This allows a request to be traced across the gateway and service boundary.
 
 ---
 
 ## Data Ownership
 
-The Order and Payment services share one PostgreSQL server locally and one Cloud SQL instance in the target deployment, but they use separate logical databases and credentials:
+The Order and Payment services share the same PostgreSQL server locally and the same Cloud SQL instance in the target deployment, but use separate logical databases and credentials.
 
 ```text
 Order Service
@@ -240,7 +310,9 @@ Payment Service
 
 Neither service may access the other's database.
 
-The Restaurant and Menu Service owns MongoDB data, while the Delivery and Tracking Service owns Redis tracking state.
+The Restaurant and Menu Service owns its MongoDB data.
+
+The Delivery and Tracking Service owns Redis tracking state.
 
 ---
 
@@ -250,7 +322,7 @@ No Dockerfiles are maintained for the four application microservices.
 
 ### Java
 
-The two Spring Boot services use Jib:
+The Spring Boot services use Jib:
 
 ```text
 Java source
@@ -259,11 +331,9 @@ Java source
     → OCI image
 ```
 
-For local development, Jib loads the resulting images directly into the local Docker daemon.
-
 ### Go
 
-The two Go services use `ko`:
+The Go services use `ko`:
 
 ```text
 Go source
@@ -271,22 +341,13 @@ Go source
     → OCI image
 ```
 
-For reproducible local builds, `build-local-images.sh` executes the pinned `ko` version inside a Linux `golang` container.
+The local build script builds all four service images:
 
-The script:
+```bash
+./scripts/build-local-images.sh
+```
 
-1. bind-mounts the repository into the temporary Go container;
-2. builds each Go application with `ko`;
-3. writes the resulting image to a temporary tar archive;
-4. loads the archive into the local Docker daemon with `docker load`;
-5. tags the image as `food-delivery/<service>:local`;
-6. removes the temporary archive and temporary image tag.
-
-A Docker named volume caches `ko`, downloaded Go modules, and the Go build cache between executions.
-
-This also avoids relying on a native Windows `ko.exe`.
-
-### Local Image Names
+Local image names are:
 
 ```text
 food-delivery/restaurant-menu-service:local
@@ -305,37 +366,26 @@ Install:
 
 - Git;
 - Docker Desktop with Docker Compose;
-- Java 25 LTS;
+- Java 25;
 - Go 1.26.6;
-- Flutter 3.44.7;
+- Flutter;
 - Dart;
 - Buf.
 
-A native `ko` installation is not required for the local image-build script because the pinned `ko` version runs inside Docker.
-
-Verify the main tools:
+Verify:
 
 ```bash
 git --version
 docker --version
 docker compose version
 java -version
-javac -version
 go version
 flutter --version
 dart --version
 buf --version
 ```
 
-### Windows
-
-Repository `.sh` files should use **LF** line endings and be executed from **Git Bash**.
-
-In VS Code, Git Bash can be selected as the default terminal profile. Then the same command used on Linux/macOS works on Windows:
-
-```bash
-./scripts/build-local-images.sh
-```
+On Windows, repository `.sh` files should use **LF** line endings and are best executed through Git Bash.
 
 ---
 
@@ -354,13 +404,13 @@ Create local environment configuration:
 cp .env.example .env
 ```
 
-PowerShell equivalent:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Resolve Flutter dependencies:
+Resolve Flutter workspace dependencies:
 
 ```bash
 flutter pub get
@@ -371,24 +421,6 @@ Synchronise the Go workspace:
 
 ```bash
 go work sync
-```
-
----
-
-## Build Local Images
-
-From Git Bash, Linux, or macOS:
-
-```bash
-./scripts/build-local-images.sh
-```
-
-The script builds all four application images and prints the resulting `:local` images.
-
-Verify manually with:
-
-```bash
-docker image ls
 ```
 
 ---
@@ -427,8 +459,6 @@ docker compose down -v
 
 ### Startup Dependencies
 
-Infrastructure services use Compose health checks.
-
 ```text
 Restaurant and Menu → MongoDB + RabbitMQ
 Order               → PostgreSQL + RabbitMQ
@@ -436,11 +466,9 @@ Delivery            → Redis + RabbitMQ
 Payment             → PostgreSQL + RabbitMQ
 ```
 
-These dependencies use `service_healthy`.
+Infrastructure dependencies use Compose health checks.
 
-Envoy depends on all four application containers using `service_started`.
-
-Application readiness is handled separately through application health endpoints and, later, Kubernetes probes.
+Envoy starts after the application containers are available.
 
 ---
 
@@ -451,12 +479,13 @@ Only selected services are published to the host.
 | Port | Purpose |
 |---|---|
 | `8080` | Envoy public development listener |
+| `18081` | Alternate Envoy host port used by the Android emulator |
 | `9901` | Envoy administration interface |
 | `15672` | RabbitMQ management interface |
 
-Backend microservices and databases remain private to the Docker network.
+Backend services and databases remain private to the Docker network.
 
-Containers can communicate internally using Compose DNS names such as:
+Examples of internal Compose DNS names:
 
 ```text
 order-service:8080
@@ -467,15 +496,13 @@ redis:6379
 rabbitmq:5672
 ```
 
-A blank `PORTS` entry in `docker compose ps` does not mean a service is not listening internally.
-
-The Envoy administration interface on port `9901` is intended for local inspection only and should not be publicly exposed in the future GKE deployment.
+The Envoy administration interface is intended for local inspection only.
 
 ---
 
 ## Health Endpoints
 
-Through Envoy:
+Public health routes are exposed through Envoy:
 
 | Endpoint | Target |
 |---|---|
@@ -485,19 +512,7 @@ Through Envoy:
 | `/health/delivery` | Delivery and Tracking Service |
 | `/health/payment` | Payment Service |
 
-Example:
-
-```bash
-curl -fsS http://localhost:8080/health
-```
-
-On PowerShell, use the actual curl executable:
-
-```powershell
-curl.exe -fsS http://localhost:8080/health
-```
-
-Smoke-test all services:
+PowerShell smoke test:
 
 ```powershell
 curl.exe -fsS http://localhost:8080/health
@@ -507,22 +522,57 @@ curl.exe -fsS http://localhost:8080/health/delivery
 curl.exe -fsS http://localhost:8080/health/payment
 ```
 
-The root URL:
+The root URL currently returns `404` by design because no root route is configured.
 
-```text
-http://localhost:8080/
+---
+
+## Running the Flutter Clients
+
+### Web Platform
+
+```powershell
+cd apps/platform_web
+
+flutter run -d chrome `
+  --web-port 3000 `
+  --dart-define=API_BASE_URL=http://localhost:8080
 ```
 
-currently returns `404` by design because no root route is configured.
+The web application supports:
 
-The Spring Boot services expose Actuator liveness/readiness endpoints, while the Go services expose:
+- `CUSTOMER`;
+- `RESTAURANT_OWNER`;
+- `ADMIN`.
 
-```text
-/health/live
-/health/ready
+Each role is routed to its corresponding placeholder Cycle 1 screen.
+
+### Courier Android App
+
+Check the available emulator:
+
+```powershell
+flutter devices
 ```
 
-Future GKE deployments will use native Kubernetes HTTP readiness and liveness probes.
+Run the courier application:
+
+```powershell
+cd apps/courier_mobile
+
+flutter run `
+  -d emulator-5554 `
+  --dart-define=API_BASE_URL=http://10.0.2.2:18081
+```
+
+The emulator identifier may differ.
+
+The Android emulator uses `10.0.2.2` to reach the host machine.
+
+The courier application accepts only users whose trusted role claim is:
+
+```text
+COURIER
+```
 
 ---
 
@@ -542,48 +592,46 @@ cd ../..
 
 ### Go
 
-Formatting:
-
-```bash
-gofmt -w services/delivery-tracking-service
-gofmt -w services/payment-service
-```
-
-Static analysis:
-
 ```bash
 go vet ./services/delivery-tracking-service/...
-go vet ./services/payment-service/...
-```
-
-Tests:
-
-```bash
 go test ./services/delivery-tracking-service/...
+
+go vet ./services/payment-service/...
 go test ./services/payment-service/...
 ```
 
-If Windows Application Control blocks generated Go test executables, the tests can be run in the same Linux Go version through Docker:
+If Windows Application Control blocks generated Go test executables, run the checks inside the matching Go container.
+
+Example:
 
 ```powershell
 docker run --rm `
   -v "${PWD}:/workspace" `
   -w /workspace `
   golang:1.26.6 `
-  go test ./services/delivery-tracking-service/... ./services/payment-service/...
+  sh -c "go vet ./services/delivery-tracking-service/... && go test ./services/delivery-tracking-service/..."
 ```
 
 ### Flutter
 
-```bash
-flutter pub get
-dart pub workspace list
-dart format --output=none --set-exit-if-changed apps
+Relevant workspace members are:
+
+```text
+apps/platform_web
+apps/courier_mobile
+apps/packages/shared_auth
+apps/packages/shared_models
+apps/packages/shared_networking
 ```
 
-Run `flutter analyze` for the relevant workspace members.
+For each relevant package:
 
-Flutter tests are also executed by the Ubuntu-based CI workflow.
+```bash
+flutter analyze
+flutter test
+```
+
+Packages without a `test/` directory are analyzed but do not require `flutter test`.
 
 Build the web application:
 
@@ -597,17 +645,35 @@ cd ../..
 
 ```bash
 cd contracts/proto
+
 buf format --diff --exit-code
 buf lint
 buf build
+buf generate
+
+buf build \
+  --as-file-descriptor-set \
+  --exclude-source-info \
+  -o ../../gateway/envoy/foundation-descriptor.pb
+
 cd ../..
 ```
+
+Generated source code and the Envoy descriptor are checked for drift in CI.
 
 ### Infrastructure
 
 ```bash
 docker compose config --quiet
 bash -n infrastructure/postgres/init/create-service-databases.sh
+```
+
+Validate Envoy through Compose:
+
+```powershell
+docker compose run --rm --no-deps envoy `
+  --mode validate `
+  -c /etc/envoy/envoy.yaml
 ```
 
 ---
@@ -618,37 +684,31 @@ The repository contains three GitHub Actions workflows:
 
 | Workflow | Trigger | Responsibility |
 |---|---|---|
-| `ci.yml` | Pull request targeting `main` | Full validation and testing |
-| `cd.yml` | Push / merge commit to `main` | Publish SHA-tagged continuous images |
+| `ci.yml` | Pull request targeting `main` | Validation and testing |
+| `cd.yml` | Push / merge to `main` | Publish SHA-tagged continuous images |
 | `release.yml` | Git tag `vX.Y.Z` | Promote an existing build to a formal release |
 
-### CI
+### Continuous Integration
 
-Full CI runs once on pull requests targeting `main`.
+CI validates:
 
-It validates:
-
-- Protobuf contracts;
+- Protobuf contracts and generated-artifact drift;
 - Java builds, tests, and Jib image construction;
 - Go formatting, vetting, compilation, tests, and `ko` image construction;
-- Flutter formatting, analysis, tests, and web build;
-- Docker Compose;
+- Flutter formatting, analysis, access-control/networking tests, and web build;
+- Docker Compose configuration;
 - PostgreSQL initialization-script syntax;
 - Envoy configuration.
 
-The aggregate required status check is:
+The aggregate required check is:
 
 ```text
 CI / Required
 ```
 
-The complete CI suite is not repeated after a merge.
-
 ### Continuous Delivery
 
-After a successful PR is merged, the resulting push to `main` triggers `cd.yml`.
-
-All four service images are published to Docker Hub using the complete Git commit SHA:
+After a successful PR is merged, `cd.yml` publishes all four application images using the complete Git commit SHA:
 
 ```text
 restaurant-menu-service:sha-<git-sha>
@@ -657,7 +717,7 @@ delivery-tracking-service:sha-<git-sha>
 payment-service:sha-<git-sha>
 ```
 
-These are continuous builds, not formal releases.
+These are continuous builds rather than formal releases.
 
 ---
 
@@ -665,14 +725,7 @@ These are continuous builds, not formal releases.
 
 The repository uses one **platform-level Semantic Version** rather than independent service versions.
 
-During initial development:
-
-```text
-0.MINOR.0     meaningful platform milestone
-0.MINOR.PATCH correction to that milestone
-```
-
-Planned milestone progression is approximately:
+Planned milestone progression:
 
 ```text
 v0.1.0  Foundation and Access Control
@@ -683,7 +736,7 @@ v0.5.0  Hardening, Deployment and Evaluation
 v1.0.0  Final evaluated prototype
 ```
 
-Versions are created when milestones are actually complete, not simply according to elapsed time.
+Versions are created when milestones are complete.
 
 Annotated Git tags are the release source of truth:
 
@@ -692,7 +745,7 @@ git tag -a v0.1.0 -m "Food Delivery Platform v0.1.0"
 git push origin v0.1.0
 ```
 
-The release workflow does **not rebuild** the applications. It promotes the already-published SHA image corresponding to the tagged commit:
+The release workflow promotes the already-published SHA image rather than rebuilding it.
 
 ```text
 :sha-<git-sha>
@@ -702,34 +755,13 @@ The release workflow does **not rebuild** the applications. It promotes the alre
       +---- :latest
 ```
 
-`latest` therefore means **latest formal release**, not latest merge.
-
-The release workflow also creates the corresponding GitHub Release.
-
-### Version Identities
-
-| Identifier | Purpose |
-|---|---|
-| `v0.3.0` | Platform release |
-| Git SHA | Exact source revision |
-| `:sha-<git-sha>` | Continuous-build traceability |
-| `:0.3.0` | Release image tag |
-| `:latest` | Latest formal release |
-| `@sha256:...` | Immutable container identity |
-
-Future GKE manifests should deploy images by immutable digest:
-
-```text
-image@sha256:...
-```
-
-Platform Semantic Versions are separate from Protobuf API versions, RabbitMQ event-schema versions, and smart-contract ABI evolution.
+`latest` means the latest formal release.
 
 ---
 
 ## Git Workflow
 
-Development uses short-lived branches such as:
+Development uses short-lived branches:
 
 ```text
 feature/<name>
@@ -743,35 +775,33 @@ Normal flow:
 
 ```text
 main
-  ↓
+ ↓
 feature branch
-  ↓
+ ↓
 Pull Request
-  ↓
+ ↓
 Full CI
-  ↓
+ ↓
 CI / Required
-  ↓
+ ↓
 Merge commit
-  ↓
+ ↓
 main
-  ↓
-SHA-tagged container publication
+ ↓
+SHA-tagged image publication
 ```
 
-The repository uses **merge commits** rather than squash or rebase merging.
+The repository uses merge commits rather than squash or rebase merging.
 
-The `main` branch should require a pull request and `CI / Required`, while blocking force pushes and deletion.
+Because this is a solo-developed dissertation project, mandatory external approvals and merge queues are not required.
 
-Because this is a solo-developed dissertation project, another person's approval, merge queues, forced up-to-date branches, and linear-history enforcement are not required.
-
-Commit messages follow a Conventional Commit-style convention, for example:
+Commit messages follow a Conventional Commit-style convention:
 
 ```text
 feat(auth): integrate Identity Platform
 fix(gateway): correct service routing
-build: improve cross-platform local image builds
-ci: configure continuous delivery
+test(auth): expand access-control coverage
+ci: verify generated contract artifacts
 docs: update architecture documentation
 ```
 
@@ -779,7 +809,7 @@ docs: update architecture documentation
 
 ## Dependency Management
 
-Dependabot checks the following ecosystems weekly:
+Dependabot checks:
 
 ```text
 GitHub Actions
@@ -788,7 +818,7 @@ Go modules
 Flutter / Dart
 ```
 
-Dependabot pull requests pass through the same `CI / Required` quality gate as other changes.
+Dependabot pull requests pass through the same `CI / Required` quality gate.
 
 ---
 
@@ -810,6 +840,10 @@ production credentials
 
 Only test accounts, test funds, and test-network blockchain assets are used in the prototype.
 
+Authentication roles are assigned only through privileged administrative tooling.
+
+The application clients must never be trusted to assign privileged roles themselves.
+
 ---
 
 ## Development Methodology
@@ -830,7 +864,13 @@ Done
 
 Blocked work is tracked separately.
 
-The project uses vertical slices, continuous testing, MoSCoW prioritisation, and a work-in-progress limit of one primary implementation task.
+The project uses:
+
+- vertical slices;
+- continuous testing;
+- MoSCoW prioritisation;
+- a work-in-progress limit of one primary implementation task;
+- risk review at the beginning and end of each development cycle.
 
 Architecture decisions and development evidence are stored under `docs/`.
 

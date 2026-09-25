@@ -29,6 +29,9 @@
 	<properties>
 		<java.version>25</java.version>
     <jib.version>3.5.2</jib.version>
+    <google.common.protos.version>2.75.0</google.common.protos.version>
+    <build-helper.version>3.6.1</build-helper.version>
+    <javax.annotation.version>1.3.2</javax.annotation.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -50,10 +53,47 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-grpc-server</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.api.grpc</groupId>
+      <artifactId>proto-google-common-protos</artifactId>
+      <version>${google.common.protos.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>javax.annotation-api</artifactId>
+      <version>${javax.annotation.version}</version>
+    </dependency>
 	</dependencies>
 
 	<build>
 		<plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>${build-helper.version}</version>
+        <executions>
+          <execution>
+            <id>add-generated-protobuf-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>${project.basedir}/../../contracts/gen/java</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
@@ -69,14 +109,15 @@
           <container>
             <ports>
               <port>8080</port>
+              <port>9090</port>
             </ports>
             <user>10001:10001</user>
             <labels>
               <org.opencontainers.image.title>
-                Restaurant and Menu Service
+                Order Service
               </org.opencontainers.image.title>
               <org.opencontainers.image.description>
-                Restaurant and menu microservice for the food delivery platform
+                Order management microservice for the food delivery platform
               </org.opencontainers.image.description>
             </labels>
           </container>

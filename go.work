@@ -1,6 +1,8 @@
-go 1.26.5
+go 1.26.6
 
 use (
+	./contracts/gen
 	./services/delivery-tracking-service
 	./services/payment-service
+	./tools/identity-admin
 )

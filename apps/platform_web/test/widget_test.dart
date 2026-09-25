@@ -1,30 +1,252 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:platform_web/auth_gate.dart';
+import 'package:platform_web/login_page.dart';
+import 'package:shared_auth/shared_auth.dart';
+import 'package:shared_models/shared_models.dart';
+import 'package:shared_networking/shared_networking.dart';
 
-import 'package:platform_web/main.dart';
+class FakeAuthRepository implements AuthRepository {
+  FakeAuthRepository({AuthenticatedUser? user, UserRole? role})
+    : _currentUser = user,
+      _role = role; // ignore: prefer_initializing_formals
+
+  AuthenticatedUser? _currentUser;
+  UserRole? _role;
+
+  final StreamController<AuthenticatedUser?> _idTokenController =
+      StreamController<AuthenticatedUser?>.broadcast();
+
+  int signInCallCount = 0;
+  int signOutCallCount = 0;
+
+  @override
+  AuthenticatedUser? get currentUser => _currentUser;
+
+  @override
+  Future<AuthenticatedUser> signIn({
+    required String email,
+    required String password,
+  }) async {
+    signInCallCount++;
+
+    return _currentUser ?? AuthenticatedUser(uid: 'test-user', email: email);
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCallCount++;
+
+    _currentUser = null;
+    _role = null;
+
+    _idTokenController.add(null);
+  }
+
+  @override
+  Future<UserRole?> currentRole({bool forceRefresh = false}) async {
+    return _role;
+  }
+
+  @override
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
+    if (_currentUser == null) {
+      return null;
+    }
+
+    return 'test-token';
+  }
+
+  @override
+  Stream<AuthenticatedUser?> authStateChanges() {
+    return _idTokenController.stream;
+  }
+
+  @override
+  Stream<AuthenticatedUser?> idTokenChanges() {
+    return _idTokenController.stream;
+  }
+
+  void emitCurrentState() {
+    _idTokenController.add(_currentUser);
+  }
+
+  Future<void> dispose() {
+    return _idTokenController.close();
+  }
+}
+
+AuthenticatedApiClient createApiClient(AuthRepository authRepository) {
+  return AuthenticatedApiClient(
+    baseUri: Uri.parse('http://example.test/'),
+    authRepository: authRepository,
+  );
+}
+
+Future<void> pumpAuthGate(
+  WidgetTester tester,
+  FakeAuthRepository authRepository,
+  AuthenticatedApiClient apiClient,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: AuthGate(authRepository: authRepository, apiClient: apiClient),
+    ),
+  );
+
+  authRepository.emitCurrentState();
+
+  await tester.pumpAndSettle();
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('displays the login form', (tester) async {
+    final authRepository = FakeAuthRepository();
+    addTearDown(authRepository.dispose);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(authRepository: authRepository)),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    expect(find.text('Food Delivery Platform'), findsOneWidget);
+    expect(find.text('Sign in to continue'), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.text('Sign in'), findsOneWidget);
+  });
+
+  testWidgets('does not submit an empty login form', (tester) async {
+    final authRepository = FakeAuthRepository();
+    addTearDown(authRepository.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LoginPage(authRepository: authRepository)),
+    );
+
+    await tester.tap(find.text('Sign in'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(authRepository.signInCallCount, 0);
+  });
+
+  testWidgets('routes a logged-out user to the login page', (tester) async {
+    final authRepository = FakeAuthRepository();
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.byType(LoginPage), findsOneWidget);
+  });
+
+  testWidgets('routes a customer to Customer Home', (tester) async {
+    final authRepository = FakeAuthRepository(
+      user: const AuthenticatedUser(
+        uid: 'customer-id',
+        email: 'customer.test@example.com',
+      ),
+      role: UserRole.customer,
+    );
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.text('Customer Home'), findsOneWidget);
+  });
+
+  testWidgets('routes a restaurant owner to Restaurant Dashboard', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository(
+      user: const AuthenticatedUser(
+        uid: 'restaurant-id',
+        email: 'restaurant.test@example.com',
+      ),
+      role: UserRole.restaurantOwner,
+    );
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.text('Restaurant Dashboard'), findsOneWidget);
+  });
+
+  testWidgets('routes an administrator to Administrator Dashboard', (
+    tester,
+  ) async {
+    final authRepository = FakeAuthRepository(
+      user: const AuthenticatedUser(
+        uid: 'admin-id',
+        email: 'admin.test@example.com',
+      ),
+      role: UserRole.admin,
+    );
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.text('Administrator Dashboard'), findsOneWidget);
+  });
+
+  testWidgets('rejects a courier role in the web application', (tester) async {
+    final authRepository = FakeAuthRepository(
+      user: const AuthenticatedUser(
+        uid: 'courier-id',
+        email: 'courier.test@example.com',
+      ),
+      role: UserRole.courier,
+    );
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.text('Customer Home'), findsNothing);
+    expect(find.text('Restaurant Dashboard'), findsNothing);
+    expect(find.text('Administrator Dashboard'), findsNothing);
+  });
+
+  testWidgets('logout returns to the login page', (tester) async {
+    final authRepository = FakeAuthRepository(
+      user: const AuthenticatedUser(
+        uid: 'customer-id',
+        email: 'customer.test@example.com',
+      ),
+      role: UserRole.customer,
+    );
+
+    final apiClient = createApiClient(authRepository);
+
+    addTearDown(authRepository.dispose);
+    addTearDown(apiClient.close);
+
+    await pumpAuthGate(tester, authRepository, apiClient);
+
+    expect(find.text('Customer Home'), findsOneWidget);
+
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.signOutCallCount, 1);
+    expect(find.byType(LoginPage), findsOneWidget);
   });
 }
