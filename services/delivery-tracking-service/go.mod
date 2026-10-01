@@ -2,7 +2,7 @@ module github.com/dyssos29/food-delivery-platform/services/delivery-tracking-ser
 
 go 1.26.6
 
-require google.golang.org/grpc v1.83.2
+require google.golang.org/grpc v1.84.0
 
 require google.golang.org/genproto/googleapis/api v0.0.0-20260831171406-18b4a7587f8a // indirect
 
