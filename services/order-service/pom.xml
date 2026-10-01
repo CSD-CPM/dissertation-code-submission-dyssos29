@@ -29,7 +29,7 @@
 	<properties>
 		<java.version>25</java.version>
     <jib.version>3.5.2</jib.version>
-    <google.common.protos.version>2.75.0</google.common.protos.version>
+    <google.common.protos.version>2.77.0</google.common.protos.version>
     <build-helper.version>3.6.1</build-helper.version>
     <javax.annotation.version>1.3.2</javax.annotation.version>
 	</properties>
