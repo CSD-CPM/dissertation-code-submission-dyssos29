@@ -13,3 +13,6 @@
 # Maven wrappers
 mvnw text eol=lf
 mvnw.cmd text eol=crlf
+
+# Java Protobuf output contains generator-produced whitespace.
+contracts/gen/java/** -whitespace

@@ -1,0 +1,122 @@
+syntax = "proto3";
+
+package fooddelivery.order.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/dyssos29/food-delivery-platform/contracts/gen/go/fooddelivery/order/v1;orderv1";
+option java_multiple_files = true;
+option java_package = "com.fooddelivery.order.v1";
+
+// ==========================================================
+// Order Service
+// ==========================================================
+
+service OrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/customer/orders"
+      body: "*"
+    };
+  }
+
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/customer/orders/{order_id}"
+      additional_bindings: {get: "/api/v1/restaurant/orders/{order_id}"}
+    };
+  }
+
+  rpc ListCustomerOrders(ListCustomerOrdersRequest) returns (ListCustomerOrdersResponse) {
+    option (google.api.http) = {get: "/api/v1/customer/orders"};
+  }
+
+  rpc ListRestaurantOrders(ListRestaurantOrdersRequest) returns (ListRestaurantOrdersResponse) {
+    option (google.api.http) = {get: "/api/v1/restaurant/restaurants/{restaurant_id}/orders"};
+  }
+
+  rpc UpdateOrderStatus(UpdateOrderStatusRequest) returns (UpdateOrderStatusResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/restaurant/orders/{order_id}/status"
+      body: "*"
+    };
+  }
+}
+
+// ==========================================================
+// Models
+// ==========================================================
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_PLACED = 1;
+  ORDER_STATUS_ACCEPTED = 2;
+  ORDER_STATUS_REJECTED = 3;
+}
+
+message Order {
+  string id = 1;
+  string customer_sub = 2;
+  string restaurant_id = 3;
+  repeated OrderItem items = 4;
+  int64 total_minor_units = 5;
+  OrderStatus status = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message OrderItem {
+  string menu_item_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+  int64 unit_price_minor_units = 4;
+}
+
+// ==========================================================
+// Order requests / responses
+// ==========================================================
+
+message CreateOrderRequest {
+  string restaurant_id = 1;
+  repeated CreateOrderLine items = 2;
+}
+
+message CreateOrderLine {
+  string menu_item_id = 1;
+  int32 quantity = 2;
+}
+
+message CreateOrderResponse {
+  Order order = 1;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}
+
+message ListCustomerOrdersRequest {}
+
+message ListCustomerOrdersResponse {
+  repeated Order orders = 1;
+}
+
+message ListRestaurantOrdersRequest {
+  string restaurant_id = 1;
+}
+
+message ListRestaurantOrdersResponse {
+  repeated Order orders = 1;
+}
+
+message UpdateOrderStatusRequest {
+  string order_id = 1;
+  OrderStatus status = 2;
+}
+
+message UpdateOrderStatusResponse {
+  Order order = 1;
+}
