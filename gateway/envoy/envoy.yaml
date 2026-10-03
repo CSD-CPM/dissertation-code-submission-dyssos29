@@ -48,6 +48,22 @@ static_resources:
                           route:
                             cluster: restaurant_menu_service_grpc
                         - match:
+                            path: "/api/v1/customer/restaurants"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            prefix: "/api/v1/customer/restaurants/"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            path: "/api/v1/restaurant/restaurants"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            prefix: "/api/v1/restaurant/restaurants/"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
                             path: "/api/v1/courier/ping"
                           route:
                             cluster: delivery_tracking_service_grpc
@@ -228,6 +244,7 @@ static_resources:
                         - fooddelivery.foundation.v1.OrderFoundationService
                         - fooddelivery.foundation.v1.RestaurantFoundationService
                         - fooddelivery.foundation.v1.DeliveryFoundationService
+                        - fooddelivery.restaurant.v1.RestaurantMenuService
                       match_incoming_request_route: true
                   - name: envoy.filters.http.router
                     typed_config:
