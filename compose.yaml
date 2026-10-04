@@ -32,6 +32,7 @@ services:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: local
       MONGODB_URI: mongodb://mongodb:27017/${MONGODB_DATABASE:-restaurant_menu_db}
+      INTERNAL_QUOTE_TOKEN: ${INTERNAL_QUOTE_TOKEN:?Set_INTERNAL_QUOTE_TOKEN_in_dotenv}
     depends_on:
       mongodb:
         condition: service_healthy

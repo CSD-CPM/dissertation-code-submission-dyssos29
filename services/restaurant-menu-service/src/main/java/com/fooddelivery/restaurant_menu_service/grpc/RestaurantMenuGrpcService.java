@@ -16,16 +16,22 @@ import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import com.fooddelivery.restaurant_menu_service.menu.MenuCrudService;
 import com.fooddelivery.restaurant_menu_service.menu.MenuItemDocument;
+import com.fooddelivery.restaurant_menu_service.quotation.OrderQuotationService;
 
 @GrpcService
 public class RestaurantMenuGrpcService extends RestaurantMenuServiceGrpc.RestaurantMenuServiceImplBase {
     private static final Logger log = LoggerFactory.getLogger(RestaurantMenuGrpcService.class);
     private final RestaurantCrudService restaurantService;
     private final MenuCrudService menuService;
+    private final OrderQuotationService quotationService;
 
-    public RestaurantMenuGrpcService(RestaurantCrudService restaurantService, MenuCrudService menuService) {
+    public RestaurantMenuGrpcService(
+            RestaurantCrudService restaurantService,
+            MenuCrudService menuService,
+            OrderQuotationService quotationService) {
         this.restaurantService = restaurantService;
         this.menuService = menuService;
+        this.quotationService = quotationService;
     }
 
     // ==========================================================
@@ -220,6 +226,42 @@ public class RestaurantMenuGrpcService extends RestaurantMenuServiceGrpc.Restaur
                     request.getItemId());
 
             return DeleteMenuItemResponse.newBuilder().build();
+        });
+    }
+
+
+    // ==========================================================
+    // Internal gRPC — Quote order
+    // ==========================================================
+    @Override
+    public void quoteOrder(QuoteOrderRequest request, StreamObserver<QuoteOrderResponse> observer) {
+        respond(observer, () -> {
+            var requestedLines = request.getLinesList()
+                    .stream()
+                    .map(line -> new OrderQuotationService.Line(
+                            line.getMenuItemId(),
+                            line.getQuantity()))
+                    .toList();
+
+            OrderQuotationService.Quote quote = quotationService.quote(request.getRestaurantId(), requestedLines);
+
+            QuoteOrderResponse.Builder response = QuoteOrderResponse.newBuilder()
+                            .setRestaurantId(quote.restaurantId())
+                            .setRestaurantOwnerSub(quote.restaurantOwnerSub())
+                            .setTotalMinorUnits(quote.totalMinorUnits());
+
+            for (OrderQuotationService.QuotedLine item : quote.items()) {
+                response.addItems(
+                        QuotedItem.newBuilder()
+                                .setMenuItemId(item.menuItemId())
+                                .setName(item.name())
+                                .setQuantity(item.quantity())
+                                .setUnitPriceMinorUnits(item.unitPriceMinorUnits())
+                                .setLineTotalMinorUnits(item.lineTotalMinorUnits())
+                                .build());
+            }
+
+            return response.build();
         });
     }
 
