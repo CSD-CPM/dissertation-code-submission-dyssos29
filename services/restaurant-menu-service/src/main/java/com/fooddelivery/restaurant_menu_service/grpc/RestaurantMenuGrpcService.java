@@ -14,14 +14,18 @@ import com.fooddelivery.restaurant_menu_service.restaurant.RestaurantDocument;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import com.fooddelivery.restaurant_menu_service.menu.MenuCrudService;
+import com.fooddelivery.restaurant_menu_service.menu.MenuItemDocument;
 
 @GrpcService
 public class RestaurantMenuGrpcService extends RestaurantMenuServiceGrpc.RestaurantMenuServiceImplBase {
     private static final Logger log = LoggerFactory.getLogger(RestaurantMenuGrpcService.class);
     private final RestaurantCrudService restaurantService;
+    private final MenuCrudService menuService;
 
-    public RestaurantMenuGrpcService(RestaurantCrudService restaurantService) {
+    public RestaurantMenuGrpcService(RestaurantCrudService restaurantService, MenuCrudService menuService) {
         this.restaurantService = restaurantService;
+        this.menuService = menuService;
     }
 
     // ==========================================================
@@ -130,11 +134,111 @@ public class RestaurantMenuGrpcService extends RestaurantMenuServiceGrpc.Restaur
         });
     }
 
+
+    // ==========================================================
+    // Get menu
+    // ==========================================================
+    @Override
+    public void getMenu(GetMenuRequest request, StreamObserver<GetMenuResponse> observer) {
+        respond(observer, () -> {
+            String role = TrustedIdentityInterceptor.ROLE.get();
+
+            java.util.List<MenuItemDocument> items;
+
+            if ("CUSTOMER".equals(role)) {
+                RoleGuard.requireRole(Role.CUSTOMER);
+                items = menuService.listPublic(request.getRestaurantId());
+            } else {
+                RoleGuard.requireRole(Role.RESTAURANT_OWNER);
+                items = menuService.listOwned(authenticatedSubject(), request.getRestaurantId());
+            }
+
+            GetMenuResponse.Builder response = GetMenuResponse.newBuilder();
+
+            items.stream()
+                    .map(RestaurantMenuGrpcService::toProto)
+                    .forEach(response::addItems);
+
+            return response.build();
+        });
+    }
+
+    // ==========================================================
+    // Create menu item
+    // ==========================================================
+    @Override
+    public void createMenuItem(CreateMenuItemRequest request, StreamObserver<CreateMenuItemResponse> observer) {
+        respond(observer, () -> {
+            RoleGuard.requireRole(Role.RESTAURANT_OWNER);
+
+            MenuItemDocument item = menuService.create(
+                    authenticatedSubject(),
+                    request.getRestaurantId(),
+                    request.getName(),
+                    request.getPriceMinorUnits(),
+                    request.getAvailable());
+
+            return CreateMenuItemResponse.newBuilder()
+                    .setItem(toProto(item))
+                    .build();
+        });
+    }
+
+    // ==========================================================
+    // Update menu item
+    // ==========================================================
+    @Override
+    public void updateMenuItem(UpdateMenuItemRequest request, StreamObserver<UpdateMenuItemResponse> observer) {
+        respond(observer, () -> {
+            RoleGuard.requireRole(Role.RESTAURANT_OWNER);
+
+            MenuItemDocument item = menuService.update(
+                    authenticatedSubject(),
+                    request.getRestaurantId(),
+                    request.getItemId(),
+                    request.getName(),
+                    request.getPriceMinorUnits(),
+                    request.getAvailable());
+
+            return UpdateMenuItemResponse.newBuilder()
+                    .setItem(toProto(item))
+                    .build();
+        });
+    }
+
+    // ==========================================================
+    // Soft delete menu item
+    // ==========================================================
+    @Override
+    public void deleteMenuItem(DeleteMenuItemRequest request, StreamObserver<DeleteMenuItemResponse> observer) {
+        respond(observer, () -> {
+            RoleGuard.requireRole(Role.RESTAURANT_OWNER);
+
+            menuService.delete(
+                    authenticatedSubject(),
+                    request.getRestaurantId(),
+                    request.getItemId());
+
+            return DeleteMenuItemResponse.newBuilder().build();
+        });
+    }
+
     // ==========================================================
     // Shared helpers
     // ==========================================================
     private static String authenticatedSubject() {
         return TrustedIdentityInterceptor.SUBJECT.get();
+    }
+
+
+    private static MenuItem toProto(MenuItemDocument document) {
+        return MenuItem.newBuilder()
+                .setId(document.getId())
+                .setRestaurantId(document.getRestaurantId())
+                .setName(document.getName())
+                .setPriceMinorUnits(document.getPriceMinorUnits())
+                .setAvailable(document.isAvailable())
+                .build();
     }
 
     private static Restaurant toProto(RestaurantDocument document) {
