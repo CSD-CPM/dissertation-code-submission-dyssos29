@@ -15,6 +15,14 @@ enum CustomerOrderStatus {
       _ => throw FormatException('Unsupported order status: $value'),
     };
   }
+
+  String get apiValue {
+    return switch (this) {
+      CustomerOrderStatus.placed => 'ORDER_STATUS_PLACED',
+      CustomerOrderStatus.accepted => 'ORDER_STATUS_ACCEPTED',
+      CustomerOrderStatus.rejected => 'ORDER_STATUS_REJECTED',
+    };
+  }
 }
 
 class CustomerOrder {

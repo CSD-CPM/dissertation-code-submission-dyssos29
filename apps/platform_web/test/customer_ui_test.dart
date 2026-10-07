@@ -34,6 +34,11 @@ class FakeRestaurantApi implements RestaurantApi {
   Future<List<RestaurantMenuItem>> getMenu(String restaurantId) async {
     return menu.where((item) => item.restaurantId == restaurantId).toList();
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    return super.noSuchMethod(invocation);
+  }
 }
 
 class FakeOrderApi implements OrderApi {
@@ -72,6 +77,11 @@ class FakeOrderApi implements OrderApi {
   @override
   Future<CustomerOrder> getOrder(String orderId) async {
     return orders.firstWhere((order) => order.id == orderId);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    return super.noSuchMethod(invocation);
   }
 }
 

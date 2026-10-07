@@ -66,4 +66,44 @@ class OrderApi {
 
     return CustomerOrder.fromJson(json['order'] as Map<String, dynamic>);
   }
+
+  Future<List<CustomerOrder>> listRestaurantOrders(String restaurantId) async {
+    final response = await _apiClient.get(
+      '/api/v1/restaurant/restaurants/$restaurantId/orders',
+    );
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final orders = json['orders'] as List<dynamic>? ?? [];
+
+    return orders
+        .map((item) => CustomerOrder.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CustomerOrder> getRestaurantOrder(String orderId) async {
+    final response = await _apiClient.get('/api/v1/restaurant/orders/$orderId');
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return CustomerOrder.fromJson(json['order'] as Map<String, dynamic>);
+  }
+
+  Future<CustomerOrder> updateOrderStatus({
+    required String orderId,
+    required CustomerOrderStatus status,
+  }) async {
+    if (status == CustomerOrderStatus.placed) {
+      throw ArgumentError.value(
+        status,
+        'status',
+        'PLACED cannot be used as an update target.',
+      );
+    }
+
+    final response = await _apiClient.patch(
+      '/api/v1/restaurant/orders/$orderId/status',
+      body: jsonEncode({'status': status.apiValue}),
+    );
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return CustomerOrder.fromJson(json['order'] as Map<String, dynamic>);
+  }
 }
