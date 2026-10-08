@@ -262,6 +262,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Validate Docker Compose
+        env:
+          INTERNAL_QUOTE_TOKEN: ci-validation-token
         run: docker compose config --quiet
       - name: Validate PostgreSQL initialization script
         run: >

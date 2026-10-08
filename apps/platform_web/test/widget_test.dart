@@ -7,6 +7,8 @@ import 'package:platform_web/login_page.dart';
 import 'package:shared_auth/shared_auth.dart';
 import 'package:shared_models/shared_models.dart';
 import 'package:shared_networking/shared_networking.dart';
+import 'package:platform_web/customer/customer_home_page.dart';
+import 'package:platform_web/restaurant_owner/restaurant_owner_home_page.dart';
 
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({AuthenticatedUser? user, UserRole? role})
@@ -143,7 +145,7 @@ void main() {
     expect(find.byType(LoginPage), findsOneWidget);
   });
 
-  testWidgets('routes a customer to Customer Home', (tester) async {
+  testWidgets('routes a customer to the customer interface', (tester) async {
     final authRepository = FakeAuthRepository(
       user: const AuthenticatedUser(
         uid: 'customer-id',
@@ -159,10 +161,12 @@ void main() {
 
     await pumpAuthGate(tester, authRepository, apiClient);
 
-    expect(find.text('Customer Home'), findsOneWidget);
+    expect(find.byType(CustomerHomePage), findsOneWidget);
+    expect(find.byTooltip('Basket'), findsOneWidget);
+    expect(find.byTooltip('Sign out'), findsOneWidget);
   });
 
-  testWidgets('routes a restaurant owner to Restaurant Dashboard', (
+  testWidgets('routes a restaurant owner to the owner dashboard', (
     tester,
   ) async {
     final authRepository = FakeAuthRepository(
@@ -180,6 +184,7 @@ void main() {
 
     await pumpAuthGate(tester, authRepository, apiClient);
 
+    expect(find.byType(RestaurantOwnerHomePage), findsOneWidget);
     expect(find.text('Restaurant Dashboard'), findsOneWidget);
   });
 
@@ -241,9 +246,9 @@ void main() {
 
     await pumpAuthGate(tester, authRepository, apiClient);
 
-    expect(find.text('Customer Home'), findsOneWidget);
+    expect(find.byType(CustomerHomePage), findsOneWidget);
 
-    await tester.tap(find.text('Sign out'));
+    await tester.tap(find.byTooltip('Sign out'));
     await tester.pumpAndSettle();
 
     expect(authRepository.signOutCallCount, 1);

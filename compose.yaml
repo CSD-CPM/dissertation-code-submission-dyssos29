@@ -31,6 +31,8 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: local
+      MONGODB_URI: mongodb://mongodb:27017/${MONGODB_DATABASE:-restaurant_menu_db}
+      INTERNAL_QUOTE_TOKEN: ${INTERNAL_QUOTE_TOKEN:?Set_INTERNAL_QUOTE_TOKEN_in_dotenv}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -43,6 +45,12 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: local
+      ORDER_DB_URL: jdbc:postgresql://postgres:5432/${ORDER_DB_NAME:-order_service_db}
+      ORDER_DB_USER: ${ORDER_DB_USER:-order_service_user}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:-local-order-password}
+      RESTAURANT_SERVICE_GRPC_HOST: restaurant-menu-service
+      RESTAURANT_SERVICE_GRPC_PORT: 9090
+      INTERNAL_QUOTE_TOKEN: ${INTERNAL_QUOTE_TOKEN:?Set_INTERNAL_QUOTE_TOKEN_in_dotenv}
     depends_on:
       postgres:
         condition: service_healthy

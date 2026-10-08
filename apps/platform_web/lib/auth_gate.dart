@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_auth/shared_auth.dart';
 import 'package:shared_models/shared_models.dart';
 import 'package:shared_networking/shared_networking.dart';
-
 import 'login_page.dart';
 import 'role_home_page.dart';
+import 'customer/customer_home_page.dart';
+import 'restaurant_owner/restaurant_owner_home_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({
@@ -44,19 +45,13 @@ class AuthGate extends StatelessWidget {
             }
 
             return switch (role) {
-              UserRole.customer => RoleHomePage(
+              UserRole.customer => CustomerHomePage(
                 user: user,
-                role: role,
-                endpoint: '/api/v1/customer/ping',
-                title: 'Customer Home',
                 authRepository: authRepository,
                 apiClient: apiClient,
               ),
-              UserRole.restaurantOwner => RoleHomePage(
+              UserRole.restaurantOwner => RestaurantOwnerHomePage(
                 user: user,
-                role: role,
-                endpoint: '/api/v1/restaurant/ping',
-                title: 'Restaurant Dashboard',
                 authRepository: authRepository,
                 apiClient: apiClient,
               ),
