@@ -8,6 +8,7 @@ import 'package:shared_auth/shared_auth.dart';
 import 'package:shared_models/shared_models.dart';
 import 'package:shared_networking/shared_networking.dart';
 import 'package:platform_web/customer/customer_home_page.dart';
+import 'package:platform_web/restaurant_owner/restaurant_owner_home_page.dart';
 
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({AuthenticatedUser? user, UserRole? role})
@@ -165,7 +166,7 @@ void main() {
     expect(find.byTooltip('Sign out'), findsOneWidget);
   });
 
-  testWidgets('routes a restaurant owner to Restaurant Dashboard', (
+  testWidgets('routes a restaurant owner to the owner dashboard', (
     tester,
   ) async {
     final authRepository = FakeAuthRepository(
@@ -183,6 +184,7 @@ void main() {
 
     await pumpAuthGate(tester, authRepository, apiClient);
 
+    expect(find.byType(RestaurantOwnerHomePage), findsOneWidget);
     expect(find.text('Restaurant Dashboard'), findsOneWidget);
   });
 

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:platform_web/api/order_api.dart';
 import 'package:platform_web/api/restaurant_api.dart';
 import 'package:platform_web/models/customer_order.dart';
+import 'package:platform_web/models/restaurant_menu_item.dart';
 import 'package:shared_networking/shared_networking.dart';
 
 class FakeAuthenticatedApiClient implements AuthenticatedApiClient {
@@ -301,6 +302,17 @@ void main() {
         '/api/v1/restaurant/restaurants/restaurant-1/menu/items/item-1',
       );
       expect(client.lastBody, isNull);
+    });
+
+    test('menu item defaults omitted Protobuf available field to false', () {
+      final item = RestaurantMenuItem.fromJson({
+        'id': 'item-1',
+        'restaurantId': 'restaurant-1',
+        'name': 'Unavailable Item',
+        'priceMinorUnits': '500',
+      });
+
+      expect(item.available, isFalse);
     });
   });
 

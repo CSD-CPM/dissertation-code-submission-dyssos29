@@ -19,7 +19,7 @@ class RestaurantMenuItem {
       restaurantId: json['restaurantId'] as String,
       name: json['name'] as String,
       priceMinorUnits: int.parse(json['priceMinorUnits'].toString()),
-      available: json['available'] as bool,
+      available: json['available'] as bool? ?? false,
     );
   }
 }

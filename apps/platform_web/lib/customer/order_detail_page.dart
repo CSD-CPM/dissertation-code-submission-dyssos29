@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_networking/shared_networking.dart';
 import '../api/order_api.dart';
 import '../models/customer_order.dart';
-import 'price_formatter.dart';
+import '../utils/price_utils.dart';
 
 class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({

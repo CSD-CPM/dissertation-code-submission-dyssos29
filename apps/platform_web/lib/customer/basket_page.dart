@@ -3,7 +3,7 @@ import 'package:shared_networking/shared_networking.dart';
 import '../api/order_api.dart';
 import '../models/customer_order.dart';
 import 'basket_controller.dart';
-import 'price_formatter.dart';
+import '../utils/price_utils.dart';
 
 class BasketPage extends StatefulWidget {
   const BasketPage({

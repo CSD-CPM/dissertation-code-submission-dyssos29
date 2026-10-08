@@ -4,7 +4,7 @@ import '../api/restaurant_api.dart';
 import '../models/restaurant.dart';
 import '../models/restaurant_menu_item.dart';
 import 'basket_controller.dart';
-import 'price_formatter.dart';
+import '../utils/price_utils.dart';
 
 class RestaurantMenuPage extends StatefulWidget {
   const RestaurantMenuPage({
