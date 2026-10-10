@@ -12,9 +12,11 @@ This repository contains an academic prototype. It uses test-network cryptocurre
 
 ## Project Status
 
-Development follows a lightweight **Solo Scrumban** process using iterative, incremental vertical slices.
+Development follows **Personal Kanban** using iterative, incremental vertical slices.
 
-The current foundation establishes:
+**Cycle 2 — Restaurant and Order Workflow is complete.**
+
+The platform currently implements:
 
 - a modular monorepo;
 - four independently deployable backend services;
@@ -29,11 +31,21 @@ The current foundation establishes:
 - service-level authorization guards;
 - authenticated Flutter login/logout and role-based routing;
 - request-ID propagation from Envoy to backend services;
-- automated access-control and generated-contract tests;
+- restaurant and menu management for restaurant owners;
+- customer restaurant and menu browsing;
+- basket and checkout;
+- server-authoritative order pricing;
+- PostgreSQL-backed order persistence;
+- customer order history and details;
+- restaurant-owner order processing;
+- `PLACED -> ACCEPTED` and `PLACED -> REJECTED` workflows;
+- automated contract, backend, Flutter, and infrastructure validation;
 - CI/CD workflows;
 - container-image publication and release versioning.
 
-Cycle 1 establishes the platform foundation and access-control vertical slice. Later cycles add business workflows, messaging, blockchain payments, delivery tracking, deployment, and evaluation.
+Later cycles add RabbitMQ-based workflows, blockchain payments, delivery and real-time tracking, cloud deployment, and evaluation.
+
+Firebase Cloud Messaging is not part of the prototype implementation scope and is retained as potential future work.
 
 ---
 
@@ -53,37 +65,27 @@ Supporting platform components include:
 - **Google Cloud Identity Platform** for authentication and identity management;
 - **Envoy Proxy** as the centralized edge gateway;
 - **RabbitMQ** for asynchronous communication and Saga choreography;
-- **Firebase Cloud Messaging** for customer notification fallback;
 - **Base Sepolia** for test-network smart-contract execution.
 
-```text
-Flutter Clients
-      |
-      v
-    Envoy
-      |
-      +-----------------------------------+
-      |            |            |        |
-      v            v            v        v
- Restaurant      Order       Delivery   Payment
- & Menu          Service     & Tracking Service
- Service                     Service
-      |            |            |        |
-   MongoDB     PostgreSQL      Redis   PostgreSQL
-      \            |            |       /
-       +-----------+ RabbitMQ --+------+
-                                    |
-                                    v
-                              Base Sepolia
-```
+![Platform architecture](docs/diagrams/platform-architecture.png)
+
+[View the high-resolution architecture PDF](docs/diagrams/platform-architecture.pdf)
+
+The editable source is available at
+
+[`docs/diagrams/platform-architecture.drawio`](docs/diagrams/platform-architecture.drawio).
 
 Each service exclusively owns its datastore. Cross-service database access is prohibited.
 
 RabbitMQ communicates only with application services and does not connect directly to databases.
 
+The architecture diagram represents the target prototype architecture. RabbitMQ-based workflows, blockchain settlement, courier delivery, live tracking, WebSockets, and GKE deployment are implemented in later development cycles.
+
 ---
 
 ## Technology Stack
+
+The stack contains both technologies already implemented in Cycles 1–2 and technologies planned for later cycles.
 
 | Area | Technology |
 |---|---|
@@ -104,7 +106,6 @@ RabbitMQ communicates only with application services and does not connect direct
 | Courier location ingestion | Native gRPC streaming |
 | Customer live tracking | WebSockets |
 | Messaging | RabbitMQ / AMQP 0-9-1 |
-| Notifications | Firebase Cloud Messaging |
 | Relational storage | PostgreSQL / Cloud SQL |
 | Document storage | MongoDB Atlas |
 | Tracking storage | Redis |
@@ -115,6 +116,8 @@ RabbitMQ communicates only with application services and does not connect direct
 | Smart contract | Solidity |
 | Smart-contract tooling | Foundry |
 | Test blockchain | Base Sepolia |
+
+FCM push notifications are reserved for possible future work rather than the prototype implementation.
 
 ---
 
@@ -154,11 +157,21 @@ food-delivery-platform/
 │   └── envoy/
 │
 ├── infrastructure/
+│
 ├── smart-contracts/
 │   └── escrow/
+│
 ├── tools/
 │   └── identity-admin/
+│
 ├── docs/
+│   ├── cycles/
+│   │   ├── cycle-1/
+│   │   └── cycle-2/
+│   ├── decisions/
+│   ├── diagrams/
+│   └── risk-register.md
+│
 ├── scripts/
 ├── compose.yaml
 ├── go.work
@@ -166,22 +179,34 @@ food-delivery-platform/
 └── README.md
 ```
 
-The repository is a **modular monorepo**, and its folder structure is approximate and may change. Each microservice remains independently buildable, testable, containerised, and deployable.
+The repository is a **modular monorepo**. Each microservice remains independently buildable, testable, containerised, and deployable.
 
 ---
 
 ## Communication Model
 
-External web traffic enters through Envoy:
+Web clients use REST/JSON endpoints exposed by Envoy, which translates selected operations into backend gRPC calls through gRPC-JSON transcoding using the shared Protobuf contracts.
 
 ```text
 Flutter Web
-    → REST
-    → Envoy
-    → backend services
+    → REST/JSON
+    → Envoy (gRPC-JSON transcoder)
+    → gRPC backend services
 ```
 
-Courier location updates use native gRPC streaming:
+Internal synchronous service communication uses gRPC where required.
+
+Cycle 2 includes synchronous order quotation:
+
+```text
+Order Service
+    → gRPC
+    → Restaurant and Menu Service
+```
+
+This allows menu availability and pricing to be validated by the service that owns that data rather than trusting client-supplied prices.
+
+Courier location updates are planned to use native gRPC streaming:
 
 ```text
 Courier Mobile
@@ -190,7 +215,7 @@ Courier Mobile
     → Delivery and Tracking Service
 ```
 
-Customer live tracking uses:
+Customer live tracking is planned to use:
 
 ```text
 Delivery and Tracking Service
@@ -199,11 +224,11 @@ Delivery and Tracking Service
     → Customer Web
 ```
 
-Internal synchronous service communication uses gRPC where required.
+Customer WebSocket connections will require a browser-compatible authentication mechanism consistent with Identity Platform. The Delivery and Tracking Service must also authorize access to the specific delivery being tracked, rather than relying on the `CUSTOMER` role alone.
 
-Distributed workflows use RabbitMQ events and choreography-based Sagas.
+Distributed workflows will use RabbitMQ events and choreography-based Sagas.
 
-Individual GPS location updates are not sent through RabbitMQ.
+Individual GPS location updates will not be sent through RabbitMQ.
 
 ---
 
@@ -211,7 +236,7 @@ Individual GPS location updates are not sent through RabbitMQ.
 
 Google Cloud Identity Platform authenticates users. Flutter clients use Firebase Auth SDKs to obtain Identity Platform ID tokens.
 
-The platform currently defines four roles:
+The platform defines four roles:
 
 ```text
 CUSTOMER
@@ -251,11 +276,13 @@ x-authenticated-role
 
 Backend services retain a second authorization boundary and reject requests with missing or incorrect trusted identity metadata.
 
+Envoy must remove or overwrite client-supplied identity headers. Direct service-to-service gRPC calls bypass the public gateway and require a separately controlled trust boundary; backend services must not treat arbitrary caller-supplied identity metadata as verified.
+
 Public health routes do not require authentication.
 
 ### Access Matrix
 
-Expected protected-endpoint behaviour:
+Expected HTTP responses for the Cycle 1 protected role-probe endpoints:
 
 | Token | Customer | Restaurant | Courier | Admin |
 |---|---:|---:|---:|---:|
@@ -266,7 +293,7 @@ Expected protected-endpoint behaviour:
 | COURIER | 403 | 403 | 200 | 403 |
 | ADMIN | 403 | 403 | 403 | 200 |
 
-The complete 24-case matrix is verified during Cycle 1 acceptance testing.
+The complete access-control matrix was verified during Cycle 1 acceptance testing and retained as a regression baseline.
 
 ---
 
@@ -302,7 +329,6 @@ The Order and Payment services share the same PostgreSQL server locally and the 
 Order Service
     → order_service_db
     → order_service_user
-
 Payment Service
     → payment_service_db
     → payment_service_user
@@ -466,7 +492,7 @@ Delivery            → Redis + RabbitMQ
 Payment             → PostgreSQL + RabbitMQ
 ```
 
-Infrastructure dependencies use Compose health checks.
+Infrastructure dependencies use Compose health checks. RabbitMQ is provisioned locally, while business-event processing and Saga choreography will be implemented in later development cycles.
 
 Envoy starts after the application containers are available.
 
@@ -532,7 +558,6 @@ The root URL currently returns `404` by design because no root route is configur
 
 ```powershell
 cd apps/platform_web
-
 flutter run -d chrome `
   --web-port 3000 `
   --dart-define=API_BASE_URL=http://localhost:8080
@@ -540,11 +565,11 @@ flutter run -d chrome `
 
 The web application supports:
 
-- `CUSTOMER`;
-- `RESTAURANT_OWNER`;
-- `ADMIN`.
+- `CUSTOMER` — restaurant browsing, checkout, and order history;
+- `RESTAURANT_OWNER` — restaurant/menu management and order processing;
+- `ADMIN` — authenticated foundation dashboard and protected endpoint probe.
 
-Each role is routed to its corresponding placeholder Cycle 1 screen.
+The full Administrator interface is deferred to a later development cycle.
 
 ### Courier Android App
 
@@ -558,7 +583,6 @@ Run the courier application:
 
 ```powershell
 cd apps/courier_mobile
-
 flutter run `
   -d emulator-5554 `
   --dart-define=API_BASE_URL=http://10.0.2.2:18081
@@ -574,6 +598,8 @@ The courier application accepts only users whose trusted role claim is:
 COURIER
 ```
 
+Delivery functionality is implemented in a later development cycle.
+
 ---
 
 ## Local Verification
@@ -584,7 +610,6 @@ COURIER
 cd services/restaurant-menu-service
 ./mvnw -B -ntp verify
 cd ../..
-
 cd services/order-service
 ./mvnw -B -ntp verify
 cd ../..
@@ -595,7 +620,6 @@ cd ../..
 ```bash
 go vet ./services/delivery-tracking-service/...
 go test ./services/delivery-tracking-service/...
-
 go vet ./services/payment-service/...
 go test ./services/payment-service/...
 ```
@@ -645,17 +669,14 @@ cd ../..
 
 ```bash
 cd contracts/proto
-
 buf format --diff --exit-code
 buf lint
 buf build
 buf generate
-
-buf build \
-  --as-file-descriptor-set \
-  --exclude-source-info \
+buf build \\
+  --as-file-descriptor-set \\
+  --exclude-source-info \\
   -o ../../gateway/envoy/foundation-descriptor.pb
-
 cd ../..
 ```
 
@@ -695,7 +716,7 @@ CI validates:
 - Protobuf contracts and generated-artifact drift;
 - Java builds, tests, and Jib image construction;
 - Go formatting, vetting, compilation, tests, and `ko` image construction;
-- Flutter formatting, analysis, access-control/networking tests, and web build;
+- Flutter formatting, analysis, tests, and web build;
 - Docker Compose configuration;
 - PostgreSQL initialization-script syntax;
 - Envoy configuration.
@@ -736,7 +757,7 @@ v0.5.0  Hardening, Deployment and Evaluation
 v1.0.0  Final evaluated prototype
 ```
 
-Versions are created when milestones are complete.
+Versions are created when milestones are complete and merged into `main`.
 
 Annotated Git tags are the release source of truth:
 
@@ -844,11 +865,26 @@ Authentication roles are assigned only through privileged administrative tooling
 
 The application clients must never be trusted to assign privileged roles themselves.
 
+Order ownership and restaurant ownership are derived from trusted authenticated identity rather than client-supplied identity values.
+
+Authoritative menu availability and pricing are obtained from the Restaurant and Menu Service rather than trusted from the customer client.
+
+---
+
+## Development Evidence
+
+Development evidence is retained under `docs/cycles/`.
+
+- [Cycle 1 — Foundation and Access Control](docs/cycles/cycle-1/description.md)
+- [Cycle 2 — Restaurant and Order Workflow](docs/cycles/cycle-2/description.md)
+
+The current architecture files are stored under [`docs/diagrams/`](docs/diagrams/).
+
 ---
 
 ## Development Methodology
 
-Development follows **Solo Scrumban**:
+Development follows **Personal Kanban** using continuous flow:
 
 ```text
 Backlog
@@ -857,7 +893,7 @@ Ready
    ↓
 In Progress
    ↓
-Testing / Review
+Review
    ↓
 Done
 ```
@@ -866,13 +902,41 @@ Blocked work is tracked separately.
 
 The project uses:
 
-- vertical slices;
-- continuous testing;
+- vertical-slice development;
+- continuous testing and integration;
 - MoSCoW prioritisation;
 - a work-in-progress limit of one primary implementation task;
-- risk review at the beginning and end of each development cycle.
+- risk review throughout development.
 
-Architecture decisions and development evidence are stored under `docs/`.
+Development cycles represent logical functional increments rather than time-boxed Scrum sprints.
+
+Architecture decisions, risk records, diagrams, and development evidence are stored under `docs/`.
+
+---
+
+## Planned Development and Future Work
+
+### Remaining Prototype Development
+
+Functionality planned for subsequent development cycles includes:
+
+- RabbitMQ-based event-driven Saga workflows;
+- Solidity escrow and multi-party settlement;
+- Base Sepolia integration;
+- payment failure and settlement-pending handling;
+- extended Administrator payment and settlement views;
+- courier assignment and delivery workflow;
+- Redis-backed live location tracking;
+- customer WebSocket tracking;
+- GKE deployment and evaluation.
+
+### Potential Future Enhancements
+
+The following improvements are outside the current prototype implementation scope:
+
+- **Firebase Cloud Messaging (FCM)** — introduce optional push notifications for delivery milestones when customers are not actively connected to live tracking.
+- **Transactional Outbox** — improve critical Saga event publication by atomically recording business-state changes and outgoing events in the Order and Payment services' own PostgreSQL databases, addressing the accepted dual-write failure window.
+- **iOS Courier Application** — extend the Flutter mobile client to iOS, incorporating platform-specific location permissions, background-execution handling, application signing and provisioning, and device testing to support reliable courier tracking on Apple devices.
 
 ---
 
