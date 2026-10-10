@@ -44,7 +44,40 @@ static_resources:
                           route:
                             cluster: order_service_grpc
                         - match:
+                            path: "/api/v1/customer/orders"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            prefix: "/api/v1/customer/orders/"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            prefix: "/api/v1/restaurant/orders/"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
                             path: "/api/v1/restaurant/ping"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            safe_regex:
+                              regex: "^/api/v1/restaurant/restaurants/[^/]+/orders$"
+                          route:
+                            cluster: order_service_grpc
+                        - match:
+                            path: "/api/v1/customer/restaurants"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            prefix: "/api/v1/customer/restaurants/"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            path: "/api/v1/restaurant/restaurants"
+                          route:
+                            cluster: restaurant_menu_service_grpc
+                        - match:
+                            prefix: "/api/v1/restaurant/restaurants/"
                           route:
                             cluster: restaurant_menu_service_grpc
                         - match:
@@ -228,6 +261,8 @@ static_resources:
                         - fooddelivery.foundation.v1.OrderFoundationService
                         - fooddelivery.foundation.v1.RestaurantFoundationService
                         - fooddelivery.foundation.v1.DeliveryFoundationService
+                        - fooddelivery.restaurant.v1.RestaurantMenuService
+                        - fooddelivery.order.v1.OrderService
                       match_incoming_request_route: true
                   - name: envoy.filters.http.router
                     typed_config:

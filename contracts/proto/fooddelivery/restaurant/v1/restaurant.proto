@@ -1,0 +1,216 @@
+syntax = "proto3";
+
+package fooddelivery.restaurant.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/dyssos29/food-delivery-platform/contracts/gen/go/fooddelivery/restaurant/v1;restaurantv1";
+option java_multiple_files = true;
+option java_package = "com.fooddelivery.restaurant.v1";
+
+// ==========================================================
+// Restaurant and Menu Service
+// ==========================================================
+
+service RestaurantMenuService {
+  // Restaurant operations
+
+  rpc CreateRestaurant(CreateRestaurantRequest) returns (CreateRestaurantResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/restaurant/restaurants"
+      body: "*"
+    };
+  }
+
+  rpc GetRestaurant(GetRestaurantRequest) returns (GetRestaurantResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/customer/restaurants/{restaurant_id}"
+      additional_bindings: {get: "/api/v1/restaurant/restaurants/{restaurant_id}"}
+    };
+  }
+
+  rpc ListRestaurants(ListRestaurantsRequest) returns (ListRestaurantsResponse) {
+    option (google.api.http) = {get: "/api/v1/customer/restaurants"};
+  }
+
+  rpc ListOwnedRestaurants(ListOwnedRestaurantsRequest) returns (ListOwnedRestaurantsResponse) {
+    option (google.api.http) = {get: "/api/v1/restaurant/restaurants"};
+  }
+
+  rpc UpdateRestaurant(UpdateRestaurantRequest) returns (UpdateRestaurantResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/restaurant/restaurants/{restaurant_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteRestaurant(DeleteRestaurantRequest) returns (DeleteRestaurantResponse) {
+    option (google.api.http) = {delete: "/api/v1/restaurant/restaurants/{restaurant_id}"};
+  }
+
+  // Menu operations
+
+  rpc GetMenu(GetMenuRequest) returns (GetMenuResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/customer/restaurants/{restaurant_id}/menu"
+      additional_bindings: {get: "/api/v1/restaurant/restaurants/{restaurant_id}/menu"}
+    };
+  }
+
+  rpc CreateMenuItem(CreateMenuItemRequest) returns (CreateMenuItemResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/restaurant/restaurants/{restaurant_id}/menu/items"
+      body: "*"
+    };
+  }
+
+  rpc UpdateMenuItem(UpdateMenuItemRequest) returns (UpdateMenuItemResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/restaurant/restaurants/{restaurant_id}/menu/items/{item_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteMenuItem(DeleteMenuItemRequest) returns (DeleteMenuItemResponse) {
+    option (google.api.http) = {delete: "/api/v1/restaurant/restaurants/{restaurant_id}/menu/items/{item_id}"};
+  }
+
+  // Internal gRPC operation. No public HTTP binding.
+  rpc QuoteOrder(QuoteOrderRequest) returns (QuoteOrderResponse);
+}
+
+// ==========================================================
+// Models
+// ==========================================================
+
+message Restaurant {
+  string id = 1;
+  string name = 2;
+  bool active = 3;
+}
+
+message MenuItem {
+  string id = 1;
+  string restaurant_id = 2;
+  string name = 3;
+  int64 price_minor_units = 4;
+  bool available = 5;
+}
+
+// ==========================================================
+// Restaurant requests / responses
+// ==========================================================
+
+message CreateRestaurantRequest {
+  string name = 1;
+}
+
+message CreateRestaurantResponse {
+  Restaurant restaurant = 1;
+}
+
+message GetRestaurantRequest {
+  string restaurant_id = 1;
+}
+
+message GetRestaurantResponse {
+  Restaurant restaurant = 1;
+}
+
+message ListRestaurantsRequest {}
+
+message ListRestaurantsResponse {
+  repeated Restaurant restaurants = 1;
+}
+
+message ListOwnedRestaurantsRequest {}
+
+message ListOwnedRestaurantsResponse {
+  repeated Restaurant restaurants = 1;
+}
+
+message UpdateRestaurantRequest {
+  string restaurant_id = 1;
+  string name = 2;
+}
+
+message UpdateRestaurantResponse {
+  Restaurant restaurant = 1;
+}
+
+message DeleteRestaurantRequest {
+  string restaurant_id = 1;
+}
+
+message DeleteRestaurantResponse {}
+
+// ==========================================================
+// Menu requests / responses
+// ==========================================================
+
+message GetMenuRequest {
+  string restaurant_id = 1;
+}
+
+message GetMenuResponse {
+  repeated MenuItem items = 1;
+}
+
+message CreateMenuItemRequest {
+  string restaurant_id = 1;
+  string name = 2;
+  int64 price_minor_units = 3;
+  bool available = 4;
+}
+
+message CreateMenuItemResponse {
+  MenuItem item = 1;
+}
+
+message UpdateMenuItemRequest {
+  string restaurant_id = 1;
+  string item_id = 2;
+  string name = 3;
+  int64 price_minor_units = 4;
+  bool available = 5;
+}
+
+message UpdateMenuItemResponse {
+  MenuItem item = 1;
+}
+
+message DeleteMenuItemRequest {
+  string restaurant_id = 1;
+  string item_id = 2;
+}
+
+message DeleteMenuItemResponse {}
+
+// ==========================================================
+// Internal order quotation
+// ==========================================================
+
+message QuoteOrderRequest {
+  string restaurant_id = 1;
+  repeated QuoteOrderLine lines = 2;
+}
+
+message QuoteOrderLine {
+  string menu_item_id = 1;
+  int32 quantity = 2;
+}
+
+message QuotedItem {
+  string menu_item_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+  int64 unit_price_minor_units = 4;
+  int64 line_total_minor_units = 5;
+}
+
+message QuoteOrderResponse {
+  string restaurant_id = 1;
+  string restaurant_owner_sub = 2;
+  repeated QuotedItem items = 3;
+  int64 total_minor_units = 4;
+}
